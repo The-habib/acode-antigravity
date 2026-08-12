@@ -38,19 +38,19 @@ const server = http.createServer((req, res) => {
 
         let fullPrompt = '';
         if (action === 'refactor') {
-          fullPrompt = `Refactor the code snippet from file "${fileName}". Return only refactored code:\n\n\`\`\`\n${contextCode}\n\`\`\``;
+          fullPrompt = 'Refactor the code snippet from file "' + fileName + '". Return only refactored code:\\n\\n\`\`\`\\n' + contextCode + '\\n\`\`\`';
         } else if (action === 'explain') {
-          fullPrompt = `Explain in clean Markdown how code from "${fileName}" works:\n\n\`\`\`\n${contextCode}\n\`\`\``;
+          fullPrompt = 'Explain in clean Markdown how code from "' + fileName + '" works:\\n\\n\`\`\`\\n' + contextCode + '\\n\`\`\`';
         } else if (action === 'fix') {
-          fullPrompt = `Fix bugs in code from "${fileName}". Return fixed code:\n\n\`\`\`\n${contextCode}\n\`\`\``;
+          fullPrompt = 'Fix bugs in code from "' + fileName + '". Return fixed code:\\n\\n\`\`\`\\n' + contextCode + '\\n\`\`\`';
         } else if (action === 'test') {
-          fullPrompt = `Write unit tests for snippet from "${fileName}":\n\n\`\`\`\n${contextCode}\n\`\`\``;
+          fullPrompt = 'Write unit tests for snippet from "' + fileName + '":\\n\\n\`\`\`\\n' + contextCode + '\\n\`\`\`';
         } else {
-          fullPrompt = contextCode ? `Context File: ${fileName}\n\`\`\`\n${contextCode}\n\`\`\`\n\nUser Question: ${prompt}` : prompt;
+          fullPrompt = contextCode ? 'Context File: ' + fileName + '\\n\`\`\`\\n' + contextCode + '\\n\`\`\`\\n\\nUser Question: ' + prompt : prompt;
         }
 
         const b64 = Buffer.from(fullPrompt).toString('base64');
-        const cmd = `/home/.local/bin/agy -p "$(echo '${b64}' | base64 -d)" 2>&1 || /home/.antigravity-acode/bin/antigravity -p "$(echo '${b64}' | base64 -d)" 2>&1`;
+        const cmd = '/home/.local/bin/agy -p "$(echo \'' + b64 + '\' | base64 -d)" 2>&1 || /home/.antigravity-acode/bin/antigravity -p "$(echo \'' + b64 + '\' | base64 -d)" 2>&1';
 
         exec(cmd, { maxBuffer: 10 * 1024 * 1024, env: process.env }, (error, stdout, stderr) => {
           const resultText = stdout || stderr || (error ? error.message : 'No output');

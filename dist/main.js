@@ -95,6 +95,83 @@
 
   // src/services/scripts.ts
   var ScriptService = class {
+    static getBridgeServerContent() {
+      return `#!/usr/bin/env node
+const http = require('http');
+const { exec } = require('child_process');
+
+const PORT = 8765;
+
+const server = http.createServer((req, res) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+  if (req.method === 'OPTIONS') {
+    res.writeHead(204);
+    res.end();
+    return;
+  }
+
+  if (req.url === '/ping' && req.method === 'GET') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ status: 'ok', engine: 'Google Antigravity Native Bridge', version: '1.1.12' }));
+    return;
+  }
+
+  if (req.url === '/exec' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => { body += chunk.toString(); });
+    req.on('end', () => {
+      try {
+        const payload = JSON.parse(body || '{}');
+        const prompt = payload.prompt || '';
+        const action = payload.action || 'chat';
+        const contextCode = payload.codeContext || '';
+        const fileName = payload.fileName || 'workspace';
+
+        let fullPrompt = '';
+        if (action === 'refactor') {
+          fullPrompt = 'Refactor the code snippet from file "' + fileName + '". Return only refactored code:\\n\\n\`\`\`\\n' + contextCode + '\\n\`\`\`';
+        } else if (action === 'explain') {
+          fullPrompt = 'Explain in clean Markdown how code from "' + fileName + '" works:\\n\\n\`\`\`\\n' + contextCode + '\\n\`\`\`';
+        } else if (action === 'fix') {
+          fullPrompt = 'Fix bugs in code from "' + fileName + '". Return fixed code:\\n\\n\`\`\`\\n' + contextCode + '\\n\`\`\`';
+        } else if (action === 'test') {
+          fullPrompt = 'Write unit tests for snippet from "' + fileName + '":\\n\\n\`\`\`\\n' + contextCode + '\\n\`\`\`';
+        } else {
+          fullPrompt = contextCode ? 'Context File: ' + fileName + '\\n\`\`\`\\n' + contextCode + '\\n\`\`\`\\n\\nUser Question: ' + prompt : prompt;
+        }
+
+        const b64 = Buffer.from(fullPrompt).toString('base64');
+        const cmd = '/home/.local/bin/agy -p "$(echo '' + b64 + '' | base64 -d)" 2>&1 || /home/.antigravity-acode/bin/antigravity -p "$(echo '' + b64 + '' | base64 -d)" 2>&1';
+
+        exec(cmd, { maxBuffer: 10 * 1024 * 1024, env: process.env }, (error, stdout, stderr) => {
+          const resultText = stdout || stderr || (error ? error.message : 'No output');
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({
+            success: !error,
+            resultText,
+            error: error ? error.message : null
+          }));
+        });
+      } catch (err) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, error: err.message }));
+      }
+    });
+    return;
+  }
+
+  res.writeHead(404);
+  res.end('Not Found');
+});
+
+server.listen(PORT, '0.0.0.0', () => {
+  console.log('[ANTIGRAVITY BRIDGE SERVER] Listening on http://127.0.0.1:' + PORT);
+});
+`;
+    }
     static getAgyLauncherContent() {
       return `#!/bin/sh
 # Real Google Antigravity Native Launcher for Acode Terminal
@@ -105,6 +182,11 @@ export BIN_DIR="\${BASE_DIR}/bin"
 export LD_LIBRARY_PATH="\${GLIBC_DIR}:\${LD_LIBRARY_PATH}"
 export HOME="/home"
 export PATH="/home/.local/bin:\${PATH}"
+
+# Auto-start HTTP bridge server in background if not running
+if ! netstat -nlpt 2>/dev/null | grep -q 8765; then
+    node /home/.local/bin/antigravity-bridge >/dev/null 2>&1 &
+fi
 
 GLIBC_LOADER="\${GLIBC_DIR}/ld-linux-aarch64.so.1"
 NATIVE_BIN="\${BIN_DIR}/antigravity"
@@ -132,25 +214,21 @@ export BIN_DIR="\${BASE_DIR}/bin"
 
 mkdir -p "$BASE_DIR" "$GLIBC_DIR" "$BIN_DIR" /home/.local/bin
 
-chmod +x "\${GLIBC_DIR}/ld-linux-aarch64.so.1" "\${BIN_DIR}/antigravity" /home/.local/bin/agy 2>/dev/null || true
+chmod +x "\${GLIBC_DIR}/ld-linux-aarch64.so.1" "\${BIN_DIR}/antigravity" /home/.local/bin/agy /home/.local/bin/antigravity-bridge 2>/dev/null || true
 
-echo "[STATUS] Native Antigravity environment configured successfully."
+# Start bridge server
+node /home/.local/bin/antigravity-bridge >/dev/null 2>&1 &
+
+echo "[STATUS] Native Antigravity environment and HTTP Bridge Server configured successfully."
 `;
     }
     static getAgyCheckContent() {
       return `#!/bin/sh
 echo "=== GOOGLE ANTIGRAVITY DIAGNOSTIC CHECK ==="
 echo "Architecture: $(uname -m 2>&1)"
-echo "OS: $(uname -s 2>&1)"
 echo "Launcher: $(which agy 2>&1)"
-echo "Binary: /home/.antigravity-acode/bin/antigravity"
-
-if [ -f /home/.antigravity-acode/bin/antigravity ]; then
-    echo "[STATUS] PASS - Native Google Antigravity Binary exists"
-    /home/.local/bin/agy --version 2>&1 || /home/.antigravity-acode/bin/antigravity --version 2>&1
-else
-    echo "[STATUS] FAIL - Binary missing"
-fi
+echo "HTTP Bridge: http://127.0.0.1:8765/ping"
+curl -s http://127.0.0.1:8765/ping || echo "[BRIDGE] Server offline"
 `;
     }
     static getAgyRepairContent() {
@@ -158,7 +236,8 @@ fi
 echo "[ACODE ANTIGRAVITY REPAIR]"
 chmod +x /home/.antigravity-acode/glibc/ld-linux-aarch64.so.1 2>/dev/null || true
 chmod +x /home/.antigravity-acode/bin/antigravity 2>/dev/null || true
-chmod +x /home/.local/bin/agy* 2>/dev/null || true
+chmod +x /home/.local/bin/agy* /home/.local/bin/antigravity-bridge 2>/dev/null || true
+node /home/.local/bin/antigravity-bridge >/dev/null 2>&1 &
 echo "Repair completed."
 `;
     }
@@ -174,6 +253,7 @@ echo "Native Antigravity binary v1.1.12 is up to date."
       if (typeof Executor !== "undefined" && Executor.execute) {
         try {
           const scripts = [
+            { name: "antigravity-bridge", content: this.getBridgeServerContent() },
             { name: "agy", content: this.getAgyLauncherContent() },
             { name: "agy-setup", content: this.getAgySetupContent() },
             { name: "agy-check", content: this.getAgyCheckContent() },
@@ -195,6 +275,7 @@ for P in "${homeDir}/.bashrc" "${homeDir}/.profile" "${homeDir}/.zshrc"; do
         echo 'export PATH="${localBin}:$PATH"' >> "$P"
     fi
 done
+node "${localBin}/antigravity-bridge" >/dev/null 2>&1 &
 `;
           await Executor.execute(combinedCmd, true);
           return true;
@@ -476,35 +557,65 @@ PATH Configured: ${env.pathConfigured}`;
 
   // src/services/agentBridge.ts
   var AgentBridgeService = class {
+    static async checkServer() {
+      try {
+        const resp = await fetch(`${this.BRIDGE_URL}/ping`, { method: "GET" });
+        return resp.ok;
+      } catch (e) {
+        return false;
+      }
+    }
     static async executeTask(request) {
       const fileInfo = EditorBridgeService.getActiveFileInfo();
       const contextCode = request.codeContext || (fileInfo ? fileInfo.hasSelection ? fileInfo.selectedText : fileInfo.content : "");
       const filename = request.fileName || (fileInfo ? fileInfo.name : "workspace");
+      try {
+        const resp = await fetch(`${this.BRIDGE_URL}/exec`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: request.action,
+            prompt: request.prompt || "",
+            codeContext: contextCode,
+            fileName: filename
+          })
+        });
+        if (resp.ok) {
+          const data = await resp.json();
+          return {
+            success: data.success !== false,
+            resultText: data.resultText || data.error || "Antigravity CLI task completed.",
+            error: data.error
+          };
+        }
+      } catch (err) {
+        console.warn("Antigravity HTTP bridge unavailable, trying fallback IPC:", err);
+      }
       let fullPrompt = "";
       switch (request.action) {
         case "refactor":
-          fullPrompt = `Refactor the following code snippet from file "${filename}" for maximum clarity, performance, and clean code standards. Return only the refactored code block:
+          fullPrompt = `Refactor the code snippet from file "${filename}". Return only refactored code:
 
 \`\`\`
 ${contextCode}
 \`\`\``;
           break;
         case "explain":
-          fullPrompt = `Explain in clean Markdown how the following code from "${filename}" works:
+          fullPrompt = `Explain in clean Markdown how the code from "${filename}" works:
 
 \`\`\`
 ${contextCode}
 \`\`\``;
           break;
         case "fix":
-          fullPrompt = `Identify and fix any syntax errors, logic bugs, or vulnerabilities in the following code from "${filename}". Return the fixed code block and a concise summary:
+          fullPrompt = `Identify and fix bugs in code from "${filename}". Return fixed code block:
 
 \`\`\`
 ${contextCode}
 \`\`\``;
           break;
         case "test":
-          fullPrompt = `Write complete unit tests for the following code snippet from "${filename}":
+          fullPrompt = `Write unit tests for snippet from "${filename}":
 
 \`\`\`
 ${contextCode}
@@ -512,26 +623,22 @@ ${contextCode}
           break;
         case "chat":
         default:
-          if (contextCode && contextCode.trim().length > 0) {
-            fullPrompt = `Context File: ${filename}
+          fullPrompt = contextCode ? `Context File: ${filename}
 \`\`\`
 ${contextCode}
 \`\`\`
 
-User Question/Task: ${request.prompt || "Help with code"}`;
-          } else {
-            fullPrompt = request.prompt || "Hello Antigravity!";
-          }
+User Question: ${request.prompt}` : request.prompt || "Hello Antigravity!";
           break;
       }
       if (typeof Executor !== "undefined" && Executor.execute) {
         try {
           const b64Prompt = typeof btoa !== "undefined" ? btoa(fullPrompt) : Buffer.from(fullPrompt).toString("base64");
-          const cmd = `agy -p "$(echo '${b64Prompt}' | base64 -d)" 2>&1 || /home/.local/bin/agy 2>&1`;
+          const cmd = `/home/.local/bin/agy -p "$(echo '${b64Prompt}' | base64 -d)" 2>&1 || /home/.antigravity-acode/bin/antigravity -p "$(echo '${b64Prompt}' | base64 -d)" 2>&1`;
           const output = await Executor.execute(cmd, true);
           return {
             success: true,
-            resultText: output || "Antigravity task completed."
+            resultText: output || "Antigravity CLI task completed."
           };
         } catch (e) {
           return {
@@ -545,10 +652,14 @@ User Question/Task: ${request.prompt || "Help with code"}`;
         success: true,
         resultText: `[Google Antigravity Native Engine]
 
-Received prompt for file "${filename}". Antigravity CLI ready!`
+Task: ${request.action.toUpperCase()}
+File: ${filename}
+
+Antigravity is ready in your workspace!`
       };
     }
   };
+  __publicField(AgentBridgeService, "BRIDGE_URL", "http://127.0.0.1:8765");
 
   // src/ui/controlPage.ts
   var ControlPage = class {
