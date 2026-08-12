@@ -214,8 +214,8 @@ const pluginInstance = new AcodeAntigravityPlugin();
 
 acode.setPluginInit(
   PLUGIN_ID,
-  (baseUrl: string, $page: any, cache: any) => {
-    pluginInstance.init(baseUrl, $page, cache);
+  async (baseUrl: string, $page: any, cache: any) => {
+    await pluginInstance.init(baseUrl, $page, cache);
   }
 );
 
