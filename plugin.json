@@ -1,0 +1,28 @@
+{
+  "id": "com.acode.antigravity",
+  "name": "Acode Antigravity",
+  "main": "dist/main.js",
+  "version": "1.0.0",
+  "readme": "README.md",
+  "icon": "icon.png",
+  "files": [],
+  "minVersionCode": 292,
+  "price": 0,
+  "license": "MIT",
+  "keywords": [
+    "antigravity",
+    "agy",
+    "terminal",
+    "ai",
+    "cli",
+    "android"
+  ],
+  "changelogs": "CHANGELOG.md",
+  "author": {
+    "name": "Antigravity Team",
+    "email": "support@antigravity.google",
+    "url": "https://antigravity.google",
+    "github": "google-antigravity"
+  },
+  "repository": "https://github.com/google-antigravity/acode-antigravity"
+}
