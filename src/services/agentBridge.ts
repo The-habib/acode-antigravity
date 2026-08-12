@@ -1,7 +1,15 @@
 import { EditorBridgeService } from './editorBridge';
 
+export interface ChatMessage {
+  id: string;
+  sender: 'user' | 'agent';
+  text: string;
+  timestamp: string;
+  codeBlocks?: string[];
+}
+
 export interface AgentTaskRequest {
-  action: 'refactor' | 'explain' | 'fix' | 'test' | 'create' | 'custom';
+  action: 'chat' | 'refactor' | 'explain' | 'fix' | 'test';
   prompt?: string;
   codeContext?: string;
   fileName?: string;
@@ -38,23 +46,24 @@ export class AgentBridgeService {
         fullPrompt = `Write complete unit tests for the following code snippet from "${filename}":\n\n\`\`\`\n${contextCode}\n\`\`\``;
         break;
 
-      case 'create':
-        fullPrompt = `Create a new file based on prompt: "${request.prompt || 'Generate code'}". Return complete source code inside a code block.`;
-        break;
-
-      case 'custom':
-        fullPrompt = `${request.prompt || 'Analyze and assist with code'}\n\nContext File: ${filename}\n\`\`\`\n${contextCode}\n\`\`\``;
+      case 'chat':
+      default:
+        if (contextCode && contextCode.trim().length > 0) {
+          fullPrompt = `Context File: ${filename}\n\`\`\`\n${contextCode}\n\`\`\`\n\nUser Question/Task: ${request.prompt || 'Help with code'}`;
+        } else {
+          fullPrompt = request.prompt || 'Hello Antigravity!';
+        }
         break;
     }
 
     if (typeof Executor !== 'undefined' && Executor.execute) {
       try {
         const b64Prompt = typeof btoa !== 'undefined' ? btoa(fullPrompt) : Buffer.from(fullPrompt).toString('base64');
-        const cmd = `agy -p "$(echo '${b64Prompt}' | base64 -d)" 2>&1 || agy 2>&1`;
+        const cmd = `agy -p "$(echo '${b64Prompt}' | base64 -d)" 2>&1 || /home/.local/bin/agy 2>&1`;
         const output = await Executor.execute(cmd, true);
         return {
           success: true,
-          resultText: output || 'Agent finished task execution.',
+          resultText: output || 'Antigravity task completed.',
         };
       } catch (e: any) {
         return {
@@ -67,7 +76,7 @@ export class AgentBridgeService {
 
     return {
       success: true,
-      resultText: `[Google Antigravity Native Engine]\n\nTask: ${request.action.toUpperCase()}\nFile: ${filename}\n\nAntigravity is ready in your Acode workspace! Run 'agy' in terminal for interactive sessions.`,
+      resultText: `[Google Antigravity Native Engine]\n\nReceived prompt for file "${filename}". Antigravity CLI ready!`,
     };
   }
 }

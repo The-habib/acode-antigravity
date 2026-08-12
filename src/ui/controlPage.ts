@@ -1,10 +1,11 @@
 import { EditorBridgeService } from '../services/editorBridge';
-import { AgentBridgeService } from '../services/agentBridge';
+import { AgentBridgeService, ChatMessage } from '../services/agentBridge';
 import { TerminalService } from '../services/terminal';
 
 export class ControlPage {
   private static pageInstance: any = null;
-  private static lastResult: string = '';
+  private static messages: ChatMessage[] = [];
+  private static chatStream: HTMLElement | null = null;
 
   public static show(): void {
     const Page = acode.require('page');
@@ -29,32 +30,31 @@ export class ControlPage {
 
   private static renderUI(container: HTMLElement): void {
     const fileInfo = EditorBridgeService.getActiveFileInfo();
-    const contextName = fileInfo ? fileInfo.name : 'No file open';
-    const contextLength = fileInfo ? (fileInfo.hasSelection ? `${fileInfo.selectedText.length} selected chars` : `${fileInfo.content.length} total chars`) : '';
+    const contextName = fileInfo ? fileInfo.name : 'No active file';
+    const contextLength = fileInfo ? (fileInfo.hasSelection ? `${fileInfo.selectedText.length} selected chars` : `${fileInfo.content.length} chars`) : '';
 
     container.innerHTML = `
       <style>
         .ag-page-container {
-          padding: 16px;
+          padding: 14px;
           color: #ffffff;
           background: #121212;
           font-family: system-ui, -apple-system, sans-serif;
           display: flex;
           flex-direction: column;
-          gap: 16px;
+          gap: 12px;
           height: 100%;
           box-sizing: border-box;
-          overflow-y: auto;
         }
         .ag-page-header {
           display: flex;
           align-items: center;
           justify-content: space-between;
           border-bottom: 1px solid #333;
-          padding-bottom: 12px;
+          padding-bottom: 8px;
         }
         .ag-page-title {
-          font-size: 18px;
+          font-size: 16px;
           font-weight: bold;
           color: #4285f4;
           display: flex;
@@ -64,181 +64,361 @@ export class ControlPage {
         .ag-page-badge {
           background: #34a853;
           color: #fff;
-          font-size: 11px;
+          font-size: 10px;
           padding: 3px 8px;
           border-radius: 12px;
           font-weight: 600;
         }
-        .ag-page-card {
+        .ag-page-context {
+          font-size: 11px;
+          opacity: 0.85;
           background: #1e1e1e;
+          padding: 6px 10px;
+          border-radius: 4px;
+          border-left: 3px solid #4285f4;
+        }
+        .ag-page-stream {
+          flex: 1;
+          background: #181818;
           border: 1px solid #333;
           border-radius: 8px;
           padding: 12px;
+          overflow-y: auto;
           display: flex;
           flex-direction: column;
-          gap: 8px;
+          gap: 10px;
+          min-height: 200px;
         }
-        .ag-page-input {
-          width: 100%;
-          min-height: 90px;
+        .ag-msg {
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+          max-width: 90%;
+        }
+        .ag-msg-user {
+          align-self: flex-end;
+        }
+        .ag-msg-agent {
+          align-self: flex-start;
+        }
+        .ag-bubble {
+          padding: 10px 12px;
+          border-radius: 8px;
+          font-size: 12px;
+          line-height: 1.4;
+          white-space: pre-wrap;
+          word-break: break-word;
+        }
+        .ag-bubble-user {
+          background: #1a73e8;
+          color: #fff;
+          border-bottom-right-radius: 2px;
+        }
+        .ag-bubble-agent {
           background: #252526;
+          color: #e0e0e0;
+          border: 1px solid #333;
+          border-bottom-left-radius: 2px;
+        }
+        .ag-msg-time {
+          font-size: 9px;
+          opacity: 0.5;
+          align-self: flex-end;
+        }
+        .ag-code-box {
+          background: #121212;
+          border: 1px solid #3c3c3c;
+          border-radius: 6px;
+          margin-top: 6px;
+          overflow: hidden;
+        }
+        .ag-code-header {
+          background: #2d2d2d;
+          padding: 4px 8px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          font-size: 10px;
+          font-family: monospace;
+          color: #aaa;
+        }
+        .ag-code-body {
+          padding: 10px;
+          font-family: monospace;
+          font-size: 11px;
+          white-space: pre;
+          overflow-x: auto;
+          color: #4ec9b0;
+        }
+        .ag-code-actions {
+          display: flex;
+          gap: 6px;
+          padding: 6px 8px;
+          background: #1e1e1e;
+          border-top: 1px solid #333;
+        }
+        .ag-mini-btn {
+          background: #333;
           color: #fff;
           border: 1px solid #444;
-          border-radius: 6px;
-          padding: 10px;
-          box-sizing: border-box;
-          font-size: 13px;
-          resize: vertical;
+          padding: 4px 8px;
+          border-radius: 4px;
+          font-size: 10px;
+          cursor: pointer;
         }
-        .ag-page-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-          gap: 8px;
+        .ag-chips-row {
+          display: flex;
+          gap: 6px;
+          overflow-x: auto;
         }
-        .ag-page-btn {
+        .ag-chip {
           background: #2d2d2d;
           color: #fff;
           border: 1px solid #444;
-          padding: 10px 14px;
-          border-radius: 6px;
-          font-size: 12px;
-          font-weight: 600;
+          padding: 6px 12px;
+          border-radius: 14px;
+          font-size: 11px;
           cursor: pointer;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 6px;
+          white-space: nowrap;
         }
-        .ag-page-btn:active {
-          opacity: 0.8;
-          background: #3d3d3d;
-        }
-        .ag-page-btn-primary {
-          background: #4285f4;
-          border: none;
-          color: #fff;
-        }
-        .ag-page-response {
-          background: #181818;
-          border: 1px solid #333;
-          border-radius: 6px;
-          padding: 12px;
-          font-size: 12px;
-          font-family: monospace;
-          line-height: 1.5;
-          white-space: pre-wrap;
-          word-break: break-word;
-          min-height: 150px;
-          max-height: 350px;
-          overflow-y: auto;
-        }
-        .ag-page-bar {
+        .ag-input-box {
           display: flex;
           gap: 8px;
+        }
+        .ag-input {
+          flex: 1;
+          min-height: 50px;
+          max-height: 120px;
+          background: #1e1e1e;
+          color: #fff;
+          border: 1px solid #444;
+          border-radius: 6px;
+          padding: 8px 10px;
+          font-size: 12px;
+          resize: vertical;
+        }
+        .ag-send-btn {
+          background: #4285f4;
+          color: #fff;
+          border: none;
+          border-radius: 6px;
+          padding: 0 16px;
+          font-weight: bold;
+          font-size: 13px;
+          cursor: pointer;
         }
       </style>
 
       <div class="ag-page-container">
         <div class="ag-page-header">
           <div class="ag-page-title">
-            <span>🚀 Google Antigravity</span>
+            <span>🚀 Google Antigravity Chat</span>
           </div>
           <span class="ag-page-badge">Full Native Engine</span>
         </div>
 
-        <div class="ag-page-card">
-          <div style="font-size: 12px; opacity: 0.8;">
-            📌 <strong>Active Context:</strong> ${contextName} (${contextLength})
-          </div>
-          <textarea id="ag-full-prompt" class="ag-page-input" placeholder="Type prompt for Antigravity (e.g. 'Refactor this function to be async', 'Add TypeScript types', 'Fix memory leak')..."></textarea>
-          
-          <div class="ag-page-grid">
-            <button id="ag-full-submit" class="ag-page-btn ag-page-btn-primary" style="grid-column: 1 / -1;">🤖 Ask Antigravity Engine</button>
-            <button id="ag-full-refactor" class="ag-page-btn">⚡ Refactor Selection</button>
-            <button id="ag-full-fix" class="ag-page-btn">🐛 Fix Error</button>
-            <button id="ag-full-explain" class="ag-page-btn">📝 Explain Code</button>
-            <button id="ag-full-test" class="ag-page-btn">🧪 Write Tests</button>
-            <button id="ag-full-tui" class="ag-page-btn" style="grid-column: 1 / -1; background: #34a853; border: none;">🖥️ Launch Full Interactive TUI Terminal</button>
-          </div>
+        <div class="ag-page-context">
+          📌 <strong>Active Workspace Context:</strong> ${contextName} (${contextLength})
         </div>
 
-        <div class="ag-page-card">
-          <div style="font-size: 13px; font-weight: bold;">💬 Antigravity Output Stream</div>
-          <div id="ag-full-response" class="ag-page-response">Antigravity Native Engine is ready! Select code or type a prompt above.</div>
-          
-          <div class="ag-page-bar">
-            <button id="ag-full-app-sel" class="ag-page-btn ag-page-btn-primary" style="flex: 1;">Replace Selection</button>
-            <button id="ag-full-app-cur" class="ag-page-btn" style="flex: 1;">Insert at Cursor</button>
-            <button id="ag-full-app-file" class="ag-page-btn" style="flex: 1;">Replace File</button>
-          </div>
+        <div id="ag-full-chat-stream" class="ag-page-stream"></div>
+
+        <div class="ag-chips-row">
+          <button id="full-chip-refactor" class="ag-chip">⚡ Refactor Selection</button>
+          <button id="full-chip-fix" class="ag-chip">🐛 Fix Code Bugs</button>
+          <button id="full-chip-explain" class="ag-chip">📝 Explain Code</button>
+          <button id="full-chip-test" class="ag-chip">🧪 Generate Unit Tests</button>
+          <button id="full-chip-tui" class="ag-chip" style="background:#34a853;">💻 Launch TUI Terminal</button>
+          <button id="full-chip-clear" class="ag-chip" style="background:#555;">🗑️ Clear Chat</button>
+        </div>
+
+        <div class="ag-input-box">
+          <textarea id="ag-full-chat-input" class="ag-input" placeholder="Type instructions or questions for Google Antigravity CLI..."></textarea>
+          <button id="ag-full-send-btn" class="ag-send-btn">Send</button>
         </div>
       </div>
     `;
 
+    this.chatStream = container.querySelector('#ag-full-chat-stream');
+
+    if (this.messages.length === 0) {
+      this.addMessage('agent', 'Hello! Google Antigravity CLI Full Control Engine is active. How can I assist you with your project?');
+    } else {
+      this.renderMessages();
+    }
+
     this.bindEvents(container);
   }
 
-  private static bindEvents(container: HTMLElement): void {
-    const promptInput = container.querySelector('#ag-full-prompt') as HTMLTextAreaElement;
-    const submitBtn = container.querySelector('#ag-full-submit');
-    const refactorBtn = container.querySelector('#ag-full-refactor');
-    const fixBtn = container.querySelector('#ag-full-fix');
-    const explainBtn = container.querySelector('#ag-full-explain');
-    const testBtn = container.querySelector('#ag-full-test');
-    const tuiBtn = container.querySelector('#ag-full-tui');
-    const responseArea = container.querySelector('#ag-full-response') as HTMLElement;
-
-    const appSelBtn = container.querySelector('#ag-full-app-sel');
-    const appCurBtn = container.querySelector('#ag-full-app-cur');
-    const appFileBtn = container.querySelector('#ag-full-app-file');
-
-    const runTask = async (action: 'refactor' | 'explain' | 'fix' | 'test' | 'custom', userPrompt?: string) => {
-      if (responseArea) responseArea.innerText = '🤖 Antigravity is processing your request...';
-      const res = await AgentBridgeService.executeTask({ action, prompt: userPrompt });
-      this.lastResult = res.resultText || res.error || '';
-      if (responseArea) responseArea.innerText = this.lastResult;
+  private static addMessage(sender: 'user' | 'agent', text: string): void {
+    const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const msg: ChatMessage = {
+      id: String(Date.now()),
+      sender,
+      text,
+      timestamp: time,
     };
+    this.messages.push(msg);
+    this.renderMessages();
+  }
 
-    submitBtn?.addEventListener('click', () => runTask('custom', promptInput?.value || ''));
-    refactorBtn?.addEventListener('click', () => runTask('refactor'));
-    fixBtn?.addEventListener('click', () => runTask('fix'));
-    explainBtn?.addEventListener('click', () => runTask('explain'));
-    testBtn?.addEventListener('click', () => runTask('test'));
+  private static renderMessages(): void {
+    if (!this.chatStream) return;
+    this.chatStream.innerHTML = '';
 
-    tuiBtn?.addEventListener('click', () => {
-      TerminalService.launchInTerminal();
-    });
+    for (const msg of this.messages) {
+      const msgDiv = document.createElement('div');
+      msgDiv.className = `ag-msg ag-msg-${msg.sender}`;
 
-    const extractCode = (text: string): string => {
-      const match = text.match(/```(?:\w+)?\n([\s\S]*?)```/);
-      return match ? match[1].trim() : text;
-    };
+      const bubble = document.createElement('div');
+      bubble.className = `ag-bubble ag-bubble-${msg.sender}`;
 
-    appSelBtn?.addEventListener('click', () => {
-      if (this.lastResult) {
-        EditorBridgeService.replaceSelection(extractCode(this.lastResult));
+      if (msg.sender === 'agent') {
+        bubble.appendChild(this.formatMarkdownAndCode(msg.text));
+      } else {
+        bubble.innerText = msg.text;
+      }
+
+      const timeDiv = document.createElement('div');
+      timeDiv.className = 'ag-msg-time';
+      timeDiv.innerText = msg.timestamp;
+
+      msgDiv.appendChild(bubble);
+      msgDiv.appendChild(timeDiv);
+      this.chatStream.appendChild(msgDiv);
+    }
+
+    this.chatStream.scrollTop = this.chatStream.scrollHeight;
+  }
+
+  private static formatMarkdownAndCode(text: string): HTMLElement {
+    const container = document.createElement('div');
+
+    const codeBlockRegex = /```(?:\w+)?\n([\s\S]*?)```/g;
+    let lastIndex = 0;
+    let match;
+
+    while ((match = codeBlockRegex.exec(text)) !== null) {
+      if (match.index > lastIndex) {
+        const textSegment = document.createElement('span');
+        textSegment.innerText = text.substring(lastIndex, match.index);
+        container.appendChild(textSegment);
+      }
+
+      const codeSnippet = match[1].trim();
+
+      const codeBox = document.createElement('div');
+      codeBox.className = 'ag-code-box';
+
+      const codeHeader = document.createElement('div');
+      codeHeader.className = 'ag-code-header';
+      codeHeader.innerText = 'CODE SNIPPET';
+
+      const codeBody = document.createElement('div');
+      codeBody.className = 'ag-code-body';
+      codeBody.innerText = codeSnippet;
+
+      const actionsBar = document.createElement('div');
+      actionsBar.className = 'ag-code-actions';
+
+      const btnReplaceSel = document.createElement('button');
+      btnReplaceSel.className = 'ag-mini-btn';
+      btnReplaceSel.innerText = '⚡ Replace Selection';
+      btnReplaceSel.onclick = () => {
+        EditorBridgeService.replaceSelection(codeSnippet);
         if (typeof acode.pushNotification === 'function') {
           acode.pushNotification('Antigravity', 'Replaced selection in editor', { type: 'success' });
         }
-      }
-    });
+      };
 
-    appCurBtn?.addEventListener('click', () => {
-      if (this.lastResult) {
-        EditorBridgeService.insertAtCursor(extractCode(this.lastResult));
+      const btnInsertCursor = document.createElement('button');
+      btnInsertCursor.className = 'ag-mini-btn';
+      btnInsertCursor.innerText = '📥 Insert at Cursor';
+      btnInsertCursor.onclick = () => {
+        EditorBridgeService.insertAtCursor(codeSnippet);
         if (typeof acode.pushNotification === 'function') {
           acode.pushNotification('Antigravity', 'Inserted code at cursor', { type: 'success' });
         }
+      };
+
+      const btnReplaceFile = document.createElement('button');
+      btnReplaceFile.className = 'ag-mini-btn';
+      btnReplaceFile.innerText = '📄 Replace File';
+      btnReplaceFile.onclick = () => {
+        EditorBridgeService.updateActiveFileContent(codeSnippet);
+        if (typeof acode.pushNotification === 'function') {
+          acode.pushNotification('Antigravity', 'Replaced file in editor', { type: 'success' });
+        }
+      };
+
+      actionsBar.appendChild(btnReplaceSel);
+      actionsBar.appendChild(btnInsertCursor);
+      actionsBar.appendChild(btnReplaceFile);
+
+      codeBox.appendChild(codeHeader);
+      codeBox.appendChild(codeBody);
+      codeBox.appendChild(actionsBar);
+
+      container.appendChild(codeBox);
+      lastIndex = codeBlockRegex.lastIndex;
+    }
+
+    if (lastIndex < text.length) {
+      const remainingText = document.createElement('span');
+      remainingText.innerText = text.substring(lastIndex);
+      container.appendChild(remainingText);
+    }
+
+    return container;
+  }
+
+  private static bindEvents(container: HTMLElement): void {
+    const input = container.querySelector('#ag-full-chat-input') as HTMLTextAreaElement;
+    const sendBtn = container.querySelector('#ag-full-send-btn');
+
+    const chipRefactor = container.querySelector('#full-chip-refactor');
+    const chipFix = container.querySelector('#full-chip-fix');
+    const chipExplain = container.querySelector('#full-chip-explain');
+    const chipTest = container.querySelector('#full-chip-test');
+    const chipTui = container.querySelector('#full-chip-tui');
+    const chipClear = container.querySelector('#full-chip-clear');
+
+    const sendUserMessage = async (action: 'chat' | 'refactor' | 'explain' | 'fix' | 'test', promptText?: string) => {
+      const text = promptText || input?.value || '';
+      if (!text.trim() && action === 'chat') return;
+
+      if (action === 'chat') {
+        this.addMessage('user', text);
+        if (input) input.value = '';
+      } else {
+        this.addMessage('user', `[Action: ${action.toUpperCase()}] ${text}`);
+      }
+
+      this.addMessage('agent', '🤖 Antigravity CLI is thinking...');
+
+      const res = await AgentBridgeService.executeTask({ action, prompt: text });
+
+      this.messages.pop();
+      this.addMessage('agent', res.resultText || res.error || 'Done.');
+    };
+
+    sendBtn?.addEventListener('click', () => sendUserMessage('chat'));
+
+    input?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendUserMessage('chat');
       }
     });
 
-    appFileBtn?.addEventListener('click', () => {
-      if (this.lastResult) {
-        EditorBridgeService.updateActiveFileContent(extractCode(this.lastResult));
-        if (typeof acode.pushNotification === 'function') {
-          acode.pushNotification('Antigravity', 'Replaced entire file in editor', { type: 'success' });
-        }
-      }
+    chipRefactor?.addEventListener('click', () => sendUserMessage('refactor'));
+    chipFix?.addEventListener('click', () => sendUserMessage('fix'));
+    chipExplain?.addEventListener('click', () => sendUserMessage('explain'));
+    chipTest?.addEventListener('click', () => sendUserMessage('test'));
+    chipTui?.addEventListener('click', () => TerminalService.launchInTerminal());
+    chipClear?.addEventListener('click', () => {
+      this.messages = [];
+      this.addMessage('agent', 'Chat cleared. How can I assist you?');
     });
   }
 }

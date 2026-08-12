@@ -510,26 +510,28 @@ ${contextCode}
 ${contextCode}
 \`\`\``;
           break;
-        case "create":
-          fullPrompt = `Create a new file based on prompt: "${request.prompt || "Generate code"}". Return complete source code inside a code block.`;
-          break;
-        case "custom":
-          fullPrompt = `${request.prompt || "Analyze and assist with code"}
-
-Context File: ${filename}
+        case "chat":
+        default:
+          if (contextCode && contextCode.trim().length > 0) {
+            fullPrompt = `Context File: ${filename}
 \`\`\`
 ${contextCode}
-\`\`\``;
+\`\`\`
+
+User Question/Task: ${request.prompt || "Help with code"}`;
+          } else {
+            fullPrompt = request.prompt || "Hello Antigravity!";
+          }
           break;
       }
       if (typeof Executor !== "undefined" && Executor.execute) {
         try {
           const b64Prompt = typeof btoa !== "undefined" ? btoa(fullPrompt) : Buffer.from(fullPrompt).toString("base64");
-          const cmd = `agy -p "$(echo '${b64Prompt}' | base64 -d)" 2>&1 || agy 2>&1`;
+          const cmd = `agy -p "$(echo '${b64Prompt}' | base64 -d)" 2>&1 || /home/.local/bin/agy 2>&1`;
           const output = await Executor.execute(cmd, true);
           return {
             success: true,
-            resultText: output || "Agent finished task execution."
+            resultText: output || "Antigravity task completed."
           };
         } catch (e) {
           return {
@@ -543,10 +545,7 @@ ${contextCode}
         success: true,
         resultText: `[Google Antigravity Native Engine]
 
-Task: ${request.action.toUpperCase()}
-File: ${filename}
-
-Antigravity is ready in your Acode workspace! Run 'agy' in terminal for interactive sessions.`
+Received prompt for file "${filename}". Antigravity CLI ready!`
       };
     }
   };
@@ -573,31 +572,30 @@ Antigravity is ready in your Acode workspace! Run 'agy' in terminal for interact
     }
     static renderUI(container) {
       const fileInfo = EditorBridgeService.getActiveFileInfo();
-      const contextName = fileInfo ? fileInfo.name : "No file open";
-      const contextLength = fileInfo ? fileInfo.hasSelection ? `${fileInfo.selectedText.length} selected chars` : `${fileInfo.content.length} total chars` : "";
+      const contextName = fileInfo ? fileInfo.name : "No active file";
+      const contextLength = fileInfo ? fileInfo.hasSelection ? `${fileInfo.selectedText.length} selected chars` : `${fileInfo.content.length} chars` : "";
       container.innerHTML = `
       <style>
         .ag-page-container {
-          padding: 16px;
+          padding: 14px;
           color: #ffffff;
           background: #121212;
           font-family: system-ui, -apple-system, sans-serif;
           display: flex;
           flex-direction: column;
-          gap: 16px;
+          gap: 12px;
           height: 100%;
           box-sizing: border-box;
-          overflow-y: auto;
         }
         .ag-page-header {
           display: flex;
           align-items: center;
           justify-content: space-between;
           border-bottom: 1px solid #333;
-          padding-bottom: 12px;
+          padding-bottom: 8px;
         }
         .ag-page-title {
-          font-size: 18px;
+          font-size: 16px;
           font-weight: bold;
           color: #4285f4;
           display: flex;
@@ -607,176 +605,330 @@ Antigravity is ready in your Acode workspace! Run 'agy' in terminal for interact
         .ag-page-badge {
           background: #34a853;
           color: #fff;
-          font-size: 11px;
+          font-size: 10px;
           padding: 3px 8px;
           border-radius: 12px;
           font-weight: 600;
         }
-        .ag-page-card {
+        .ag-page-context {
+          font-size: 11px;
+          opacity: 0.85;
           background: #1e1e1e;
+          padding: 6px 10px;
+          border-radius: 4px;
+          border-left: 3px solid #4285f4;
+        }
+        .ag-page-stream {
+          flex: 1;
+          background: #181818;
           border: 1px solid #333;
           border-radius: 8px;
           padding: 12px;
+          overflow-y: auto;
           display: flex;
           flex-direction: column;
-          gap: 8px;
+          gap: 10px;
+          min-height: 200px;
         }
-        .ag-page-input {
-          width: 100%;
-          min-height: 90px;
+        .ag-msg {
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+          max-width: 90%;
+        }
+        .ag-msg-user {
+          align-self: flex-end;
+        }
+        .ag-msg-agent {
+          align-self: flex-start;
+        }
+        .ag-bubble {
+          padding: 10px 12px;
+          border-radius: 8px;
+          font-size: 12px;
+          line-height: 1.4;
+          white-space: pre-wrap;
+          word-break: break-word;
+        }
+        .ag-bubble-user {
+          background: #1a73e8;
+          color: #fff;
+          border-bottom-right-radius: 2px;
+        }
+        .ag-bubble-agent {
           background: #252526;
+          color: #e0e0e0;
+          border: 1px solid #333;
+          border-bottom-left-radius: 2px;
+        }
+        .ag-msg-time {
+          font-size: 9px;
+          opacity: 0.5;
+          align-self: flex-end;
+        }
+        .ag-code-box {
+          background: #121212;
+          border: 1px solid #3c3c3c;
+          border-radius: 6px;
+          margin-top: 6px;
+          overflow: hidden;
+        }
+        .ag-code-header {
+          background: #2d2d2d;
+          padding: 4px 8px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          font-size: 10px;
+          font-family: monospace;
+          color: #aaa;
+        }
+        .ag-code-body {
+          padding: 10px;
+          font-family: monospace;
+          font-size: 11px;
+          white-space: pre;
+          overflow-x: auto;
+          color: #4ec9b0;
+        }
+        .ag-code-actions {
+          display: flex;
+          gap: 6px;
+          padding: 6px 8px;
+          background: #1e1e1e;
+          border-top: 1px solid #333;
+        }
+        .ag-mini-btn {
+          background: #333;
           color: #fff;
           border: 1px solid #444;
-          border-radius: 6px;
-          padding: 10px;
-          box-sizing: border-box;
-          font-size: 13px;
-          resize: vertical;
+          padding: 4px 8px;
+          border-radius: 4px;
+          font-size: 10px;
+          cursor: pointer;
         }
-        .ag-page-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-          gap: 8px;
+        .ag-chips-row {
+          display: flex;
+          gap: 6px;
+          overflow-x: auto;
         }
-        .ag-page-btn {
+        .ag-chip {
           background: #2d2d2d;
           color: #fff;
           border: 1px solid #444;
-          padding: 10px 14px;
-          border-radius: 6px;
-          font-size: 12px;
-          font-weight: 600;
+          padding: 6px 12px;
+          border-radius: 14px;
+          font-size: 11px;
           cursor: pointer;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 6px;
+          white-space: nowrap;
         }
-        .ag-page-btn:active {
-          opacity: 0.8;
-          background: #3d3d3d;
-        }
-        .ag-page-btn-primary {
-          background: #4285f4;
-          border: none;
-          color: #fff;
-        }
-        .ag-page-response {
-          background: #181818;
-          border: 1px solid #333;
-          border-radius: 6px;
-          padding: 12px;
-          font-size: 12px;
-          font-family: monospace;
-          line-height: 1.5;
-          white-space: pre-wrap;
-          word-break: break-word;
-          min-height: 150px;
-          max-height: 350px;
-          overflow-y: auto;
-        }
-        .ag-page-bar {
+        .ag-input-box {
           display: flex;
           gap: 8px;
+        }
+        .ag-input {
+          flex: 1;
+          min-height: 50px;
+          max-height: 120px;
+          background: #1e1e1e;
+          color: #fff;
+          border: 1px solid #444;
+          border-radius: 6px;
+          padding: 8px 10px;
+          font-size: 12px;
+          resize: vertical;
+        }
+        .ag-send-btn {
+          background: #4285f4;
+          color: #fff;
+          border: none;
+          border-radius: 6px;
+          padding: 0 16px;
+          font-weight: bold;
+          font-size: 13px;
+          cursor: pointer;
         }
       </style>
 
       <div class="ag-page-container">
         <div class="ag-page-header">
           <div class="ag-page-title">
-            <span>\u{1F680} Google Antigravity</span>
+            <span>\u{1F680} Google Antigravity Chat</span>
           </div>
           <span class="ag-page-badge">Full Native Engine</span>
         </div>
 
-        <div class="ag-page-card">
-          <div style="font-size: 12px; opacity: 0.8;">
-            \u{1F4CC} <strong>Active Context:</strong> ${contextName} (${contextLength})
-          </div>
-          <textarea id="ag-full-prompt" class="ag-page-input" placeholder="Type prompt for Antigravity (e.g. 'Refactor this function to be async', 'Add TypeScript types', 'Fix memory leak')..."></textarea>
-          
-          <div class="ag-page-grid">
-            <button id="ag-full-submit" class="ag-page-btn ag-page-btn-primary" style="grid-column: 1 / -1;">\u{1F916} Ask Antigravity Engine</button>
-            <button id="ag-full-refactor" class="ag-page-btn">\u26A1 Refactor Selection</button>
-            <button id="ag-full-fix" class="ag-page-btn">\u{1F41B} Fix Error</button>
-            <button id="ag-full-explain" class="ag-page-btn">\u{1F4DD} Explain Code</button>
-            <button id="ag-full-test" class="ag-page-btn">\u{1F9EA} Write Tests</button>
-            <button id="ag-full-tui" class="ag-page-btn" style="grid-column: 1 / -1; background: #34a853; border: none;">\u{1F5A5}\uFE0F Launch Full Interactive TUI Terminal</button>
-          </div>
+        <div class="ag-page-context">
+          \u{1F4CC} <strong>Active Workspace Context:</strong> ${contextName} (${contextLength})
         </div>
 
-        <div class="ag-page-card">
-          <div style="font-size: 13px; font-weight: bold;">\u{1F4AC} Antigravity Output Stream</div>
-          <div id="ag-full-response" class="ag-page-response">Antigravity Native Engine is ready! Select code or type a prompt above.</div>
-          
-          <div class="ag-page-bar">
-            <button id="ag-full-app-sel" class="ag-page-btn ag-page-btn-primary" style="flex: 1;">Replace Selection</button>
-            <button id="ag-full-app-cur" class="ag-page-btn" style="flex: 1;">Insert at Cursor</button>
-            <button id="ag-full-app-file" class="ag-page-btn" style="flex: 1;">Replace File</button>
-          </div>
+        <div id="ag-full-chat-stream" class="ag-page-stream"></div>
+
+        <div class="ag-chips-row">
+          <button id="full-chip-refactor" class="ag-chip">\u26A1 Refactor Selection</button>
+          <button id="full-chip-fix" class="ag-chip">\u{1F41B} Fix Code Bugs</button>
+          <button id="full-chip-explain" class="ag-chip">\u{1F4DD} Explain Code</button>
+          <button id="full-chip-test" class="ag-chip">\u{1F9EA} Generate Unit Tests</button>
+          <button id="full-chip-tui" class="ag-chip" style="background:#34a853;">\u{1F4BB} Launch TUI Terminal</button>
+          <button id="full-chip-clear" class="ag-chip" style="background:#555;">\u{1F5D1}\uFE0F Clear Chat</button>
+        </div>
+
+        <div class="ag-input-box">
+          <textarea id="ag-full-chat-input" class="ag-input" placeholder="Type instructions or questions for Google Antigravity CLI..."></textarea>
+          <button id="ag-full-send-btn" class="ag-send-btn">Send</button>
         </div>
       </div>
     `;
+      this.chatStream = container.querySelector("#ag-full-chat-stream");
+      if (this.messages.length === 0) {
+        this.addMessage("agent", "Hello! Google Antigravity CLI Full Control Engine is active. How can I assist you with your project?");
+      } else {
+        this.renderMessages();
+      }
       this.bindEvents(container);
     }
-    static bindEvents(container) {
-      const promptInput = container.querySelector("#ag-full-prompt");
-      const submitBtn = container.querySelector("#ag-full-submit");
-      const refactorBtn = container.querySelector("#ag-full-refactor");
-      const fixBtn = container.querySelector("#ag-full-fix");
-      const explainBtn = container.querySelector("#ag-full-explain");
-      const testBtn = container.querySelector("#ag-full-test");
-      const tuiBtn = container.querySelector("#ag-full-tui");
-      const responseArea = container.querySelector("#ag-full-response");
-      const appSelBtn = container.querySelector("#ag-full-app-sel");
-      const appCurBtn = container.querySelector("#ag-full-app-cur");
-      const appFileBtn = container.querySelector("#ag-full-app-file");
-      const runTask = async (action, userPrompt) => {
-        if (responseArea) responseArea.innerText = "\u{1F916} Antigravity is processing your request...";
-        const res = await AgentBridgeService.executeTask({ action, prompt: userPrompt });
-        this.lastResult = res.resultText || res.error || "";
-        if (responseArea) responseArea.innerText = this.lastResult;
+    static addMessage(sender, text) {
+      const time = (/* @__PURE__ */ new Date()).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      const msg = {
+        id: String(Date.now()),
+        sender,
+        text,
+        timestamp: time
       };
-      submitBtn?.addEventListener("click", () => runTask("custom", promptInput?.value || ""));
-      refactorBtn?.addEventListener("click", () => runTask("refactor"));
-      fixBtn?.addEventListener("click", () => runTask("fix"));
-      explainBtn?.addEventListener("click", () => runTask("explain"));
-      testBtn?.addEventListener("click", () => runTask("test"));
-      tuiBtn?.addEventListener("click", () => {
-        TerminalService.launchInTerminal();
-      });
-      const extractCode = (text) => {
-        const match = text.match(/```(?:\w+)?\n([\s\S]*?)```/);
-        return match ? match[1].trim() : text;
-      };
-      appSelBtn?.addEventListener("click", () => {
-        if (this.lastResult) {
-          EditorBridgeService.replaceSelection(extractCode(this.lastResult));
+      this.messages.push(msg);
+      this.renderMessages();
+    }
+    static renderMessages() {
+      if (!this.chatStream) return;
+      this.chatStream.innerHTML = "";
+      for (const msg of this.messages) {
+        const msgDiv = document.createElement("div");
+        msgDiv.className = `ag-msg ag-msg-${msg.sender}`;
+        const bubble = document.createElement("div");
+        bubble.className = `ag-bubble ag-bubble-${msg.sender}`;
+        if (msg.sender === "agent") {
+          bubble.appendChild(this.formatMarkdownAndCode(msg.text));
+        } else {
+          bubble.innerText = msg.text;
+        }
+        const timeDiv = document.createElement("div");
+        timeDiv.className = "ag-msg-time";
+        timeDiv.innerText = msg.timestamp;
+        msgDiv.appendChild(bubble);
+        msgDiv.appendChild(timeDiv);
+        this.chatStream.appendChild(msgDiv);
+      }
+      this.chatStream.scrollTop = this.chatStream.scrollHeight;
+    }
+    static formatMarkdownAndCode(text) {
+      const container = document.createElement("div");
+      const codeBlockRegex = /```(?:\w+)?\n([\s\S]*?)```/g;
+      let lastIndex = 0;
+      let match;
+      while ((match = codeBlockRegex.exec(text)) !== null) {
+        if (match.index > lastIndex) {
+          const textSegment = document.createElement("span");
+          textSegment.innerText = text.substring(lastIndex, match.index);
+          container.appendChild(textSegment);
+        }
+        const codeSnippet = match[1].trim();
+        const codeBox = document.createElement("div");
+        codeBox.className = "ag-code-box";
+        const codeHeader = document.createElement("div");
+        codeHeader.className = "ag-code-header";
+        codeHeader.innerText = "CODE SNIPPET";
+        const codeBody = document.createElement("div");
+        codeBody.className = "ag-code-body";
+        codeBody.innerText = codeSnippet;
+        const actionsBar = document.createElement("div");
+        actionsBar.className = "ag-code-actions";
+        const btnReplaceSel = document.createElement("button");
+        btnReplaceSel.className = "ag-mini-btn";
+        btnReplaceSel.innerText = "\u26A1 Replace Selection";
+        btnReplaceSel.onclick = () => {
+          EditorBridgeService.replaceSelection(codeSnippet);
           if (typeof acode.pushNotification === "function") {
             acode.pushNotification("Antigravity", "Replaced selection in editor", { type: "success" });
           }
-        }
-      });
-      appCurBtn?.addEventListener("click", () => {
-        if (this.lastResult) {
-          EditorBridgeService.insertAtCursor(extractCode(this.lastResult));
+        };
+        const btnInsertCursor = document.createElement("button");
+        btnInsertCursor.className = "ag-mini-btn";
+        btnInsertCursor.innerText = "\u{1F4E5} Insert at Cursor";
+        btnInsertCursor.onclick = () => {
+          EditorBridgeService.insertAtCursor(codeSnippet);
           if (typeof acode.pushNotification === "function") {
             acode.pushNotification("Antigravity", "Inserted code at cursor", { type: "success" });
           }
+        };
+        const btnReplaceFile = document.createElement("button");
+        btnReplaceFile.className = "ag-mini-btn";
+        btnReplaceFile.innerText = "\u{1F4C4} Replace File";
+        btnReplaceFile.onclick = () => {
+          EditorBridgeService.updateActiveFileContent(codeSnippet);
+          if (typeof acode.pushNotification === "function") {
+            acode.pushNotification("Antigravity", "Replaced file in editor", { type: "success" });
+          }
+        };
+        actionsBar.appendChild(btnReplaceSel);
+        actionsBar.appendChild(btnInsertCursor);
+        actionsBar.appendChild(btnReplaceFile);
+        codeBox.appendChild(codeHeader);
+        codeBox.appendChild(codeBody);
+        codeBox.appendChild(actionsBar);
+        container.appendChild(codeBox);
+        lastIndex = codeBlockRegex.lastIndex;
+      }
+      if (lastIndex < text.length) {
+        const remainingText = document.createElement("span");
+        remainingText.innerText = text.substring(lastIndex);
+        container.appendChild(remainingText);
+      }
+      return container;
+    }
+    static bindEvents(container) {
+      const input = container.querySelector("#ag-full-chat-input");
+      const sendBtn = container.querySelector("#ag-full-send-btn");
+      const chipRefactor = container.querySelector("#full-chip-refactor");
+      const chipFix = container.querySelector("#full-chip-fix");
+      const chipExplain = container.querySelector("#full-chip-explain");
+      const chipTest = container.querySelector("#full-chip-test");
+      const chipTui = container.querySelector("#full-chip-tui");
+      const chipClear = container.querySelector("#full-chip-clear");
+      const sendUserMessage = async (action, promptText) => {
+        const text = promptText || input?.value || "";
+        if (!text.trim() && action === "chat") return;
+        if (action === "chat") {
+          this.addMessage("user", text);
+          if (input) input.value = "";
+        } else {
+          this.addMessage("user", `[Action: ${action.toUpperCase()}] ${text}`);
+        }
+        this.addMessage("agent", "\u{1F916} Antigravity CLI is thinking...");
+        const res = await AgentBridgeService.executeTask({ action, prompt: text });
+        this.messages.pop();
+        this.addMessage("agent", res.resultText || res.error || "Done.");
+      };
+      sendBtn?.addEventListener("click", () => sendUserMessage("chat"));
+      input?.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && !e.shiftKey) {
+          e.preventDefault();
+          sendUserMessage("chat");
         }
       });
-      appFileBtn?.addEventListener("click", () => {
-        if (this.lastResult) {
-          EditorBridgeService.updateActiveFileContent(extractCode(this.lastResult));
-          if (typeof acode.pushNotification === "function") {
-            acode.pushNotification("Antigravity", "Replaced entire file in editor", { type: "success" });
-          }
-        }
+      chipRefactor?.addEventListener("click", () => sendUserMessage("refactor"));
+      chipFix?.addEventListener("click", () => sendUserMessage("fix"));
+      chipExplain?.addEventListener("click", () => sendUserMessage("explain"));
+      chipTest?.addEventListener("click", () => sendUserMessage("test"));
+      chipTui?.addEventListener("click", () => TerminalService.launchInTerminal());
+      chipClear?.addEventListener("click", () => {
+        this.messages = [];
+        this.addMessage("agent", "Chat cleared. How can I assist you?");
       });
     }
   };
   __publicField(ControlPage, "pageInstance", null);
-  __publicField(ControlPage, "lastResult", "");
+  __publicField(ControlPage, "messages", []);
+  __publicField(ControlPage, "chatStream", null);
 
   // src/ui/sidebarPanel.ts
   var SidebarPanel = class {
@@ -832,142 +984,243 @@ Antigravity is ready in your Acode workspace! Run 'agy' in terminal for interact
     static renderUI(container) {
       container.innerHTML = `
       <style>
-        .ag-panel {
-          padding: 12px;
+        .ag-chat-panel {
+          padding: 10px;
           color: var(--text-color, #ffffff);
           font-family: system-ui, -apple-system, sans-serif;
           display: flex;
           flex-direction: column;
-          gap: 10px;
+          gap: 8px;
           height: 100%;
           box-sizing: border-box;
-          overflow-y: auto;
           pointer-events: auto;
         }
-        .ag-header {
+        .ag-chat-header {
           display: flex;
           align-items: center;
-          gap: 8px;
-          font-weight: bold;
-          font-size: 14px;
+          justify-content: space-between;
           border-bottom: 1px solid var(--border-color, #333);
-          padding-bottom: 8px;
+          padding-bottom: 6px;
+        }
+        .ag-chat-title {
+          font-weight: bold;
+          font-size: 13px;
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          color: #4285f4;
         }
         .ag-badge {
-          background: #4285f4;
+          background: #34a853;
           color: #fff;
-          font-size: 10px;
+          font-size: 9px;
           padding: 2px 6px;
           border-radius: 4px;
+          font-weight: 600;
           text-transform: uppercase;
         }
-        .ag-context-info {
-          font-size: 11px;
-          opacity: 0.9;
-          background: rgba(255,255,255,0.08);
-          padding: 8px;
+        .ag-context-pill {
+          font-size: 10px;
+          opacity: 0.85;
+          background: rgba(255,255,255,0.06);
+          padding: 4px 8px;
           border-radius: 4px;
+          border-left: 3px solid #4285f4;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
         }
-        .ag-input {
-          width: 100%;
-          min-height: 70px;
-          background: var(--dark-color, #1e1e1e);
-          color: #fff;
-          border: 1px solid var(--border-color, #444);
-          border-radius: 6px;
-          padding: 8px;
-          box-sizing: border-box;
-          font-size: 12px;
-          resize: vertical;
-        }
-        .ag-actions-grid {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 6px;
-        }
-        .ag-btn {
-          background: var(--button-background-color, #2d2d2d);
-          color: var(--button-text-color, #fff);
-          border: 1px solid var(--border-color, #444);
-          padding: 8px 10px;
-          border-radius: 6px;
-          font-size: 11px;
-          cursor: pointer;
-          font-weight: 500;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 4px;
-        }
-        .ag-btn:active {
-          opacity: 0.7;
-        }
-        .ag-btn-primary {
-          background: #4285f4;
-          color: #fff;
-          border: none;
-          grid-column: span 2;
-          font-weight: bold;
-        }
-        .ag-response {
-          background: var(--dark-color, #1e1e1e);
+        .ag-chat-stream {
+          flex: 1;
+          min-height: 180px;
+          max-height: 380px;
+          background: var(--dark-color, #181818);
           border: 1px solid var(--border-color, #333);
           border-radius: 6px;
           padding: 8px;
+          overflow-y: auto;
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+        }
+        .ag-msg {
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+          max-width: 92%;
+        }
+        .ag-msg-user {
+          align-self: flex-end;
+        }
+        .ag-msg-agent {
+          align-self: flex-start;
+        }
+        .ag-bubble {
+          padding: 8px 10px;
+          border-radius: 8px;
           font-size: 11px;
           line-height: 1.4;
           white-space: pre-wrap;
           word-break: break-word;
-          min-height: 100px;
-          max-height: 250px;
-          overflow-y: auto;
-          font-family: monospace;
         }
-        .ag-apply-bar {
+        .ag-bubble-user {
+          background: #1a73e8;
+          color: #ffffff;
+          border-bottom-right-radius: 2px;
+        }
+        .ag-bubble-agent {
+          background: #252526;
+          color: #e0e0e0;
+          border: 1px solid #333;
+          border-bottom-left-radius: 2px;
+        }
+        .ag-msg-time {
+          font-size: 8px;
+          opacity: 0.5;
+          align-self: flex-end;
+        }
+        .ag-code-box {
+          background: #121212;
+          border: 1px solid #3c3c3c;
+          border-radius: 6px;
+          margin-top: 6px;
+          overflow: hidden;
+        }
+        .ag-code-header {
+          background: #2d2d2d;
+          padding: 4px 8px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          font-size: 9px;
+          font-family: monospace;
+          color: #aaa;
+        }
+        .ag-code-body {
+          padding: 8px;
+          font-family: monospace;
+          font-size: 10px;
+          white-space: pre;
+          overflow-x: auto;
+          color: #4ec9b0;
+        }
+        .ag-code-actions {
+          display: flex;
+          gap: 4px;
+          padding: 4px 6px;
+          background: #1e1e1e;
+          border-top: 1px solid #333;
+        }
+        .ag-mini-btn {
+          background: #333;
+          color: #fff;
+          border: 1px solid #444;
+          padding: 3px 6px;
+          border-radius: 3px;
+          font-size: 9px;
+          cursor: pointer;
+        }
+        .ag-chips-row {
+          display: flex;
+          gap: 4px;
+          overflow-x: auto;
+          padding-bottom: 2px;
+        }
+        .ag-chip {
+          background: var(--button-background-color, #2d2d2d);
+          color: #fff;
+          border: 1px solid var(--border-color, #444);
+          padding: 4px 8px;
+          border-radius: 12px;
+          font-size: 10px;
+          cursor: pointer;
+          white-space: nowrap;
+        }
+        .ag-input-box {
           display: flex;
           gap: 6px;
         }
-        .ag-apply-btn {
+        .ag-input {
+          flex: 1;
+          min-height: 40px;
+          max-height: 90px;
+          background: var(--dark-color, #1e1e1e);
+          color: #fff;
+          border: 1px solid var(--border-color, #444);
+          border-radius: 6px;
+          padding: 6px 8px;
+          font-size: 11px;
+          resize: vertical;
+        }
+        .ag-send-btn {
+          background: #4285f4;
+          color: #fff;
+          border: none;
+          border-radius: 6px;
+          padding: 0 12px;
+          font-weight: bold;
+          font-size: 12px;
+          cursor: pointer;
+        }
+        .ag-footer-tools {
+          display: flex;
+          gap: 4px;
+        }
+        .ag-tool-btn {
           flex: 1;
           font-size: 10px;
           padding: 6px;
+          background: #252526;
+          color: #fff;
+          border: 1px solid #333;
+          border-radius: 4px;
+          cursor: pointer;
+          text-align: center;
         }
       </style>
-      <div class="ag-panel">
-        <div class="ag-header">
-          <span>\u{1F680} Google Antigravity</span>
-          <span class="ag-badge">Native Engine</span>
+
+      <div class="ag-chat-panel">
+        <div class="ag-chat-header">
+          <div class="ag-chat-title">
+            <span>\u{1F4AC} Antigravity CLI Chat</span>
+          </div>
+          <span class="ag-badge">Official CLI</span>
         </div>
 
-        <div id="ag-context-status" class="ag-context-info">
-          No file active in editor
+        <div id="ag-context-status" class="ag-context-pill">
+          \u{1F4C4} Workspace context ready
         </div>
 
-        <textarea id="ag-prompt-input" class="ag-input" placeholder="Ask Antigravity to generate, refactor, or edit code..."></textarea>
-
-        <div class="ag-actions-grid">
-          <button id="ag-submit-btn" class="ag-btn ag-btn-primary">\u{1F916} Ask Antigravity Engine</button>
-          <button id="ag-refactor-btn" class="ag-btn">\u26A1 Refactor</button>
-          <button id="ag-fix-btn" class="ag-btn">\u{1F41B} Fix Error</button>
-          <button id="ag-explain-btn" class="ag-btn">\u{1F4DD} Explain</button>
-          <button id="ag-test-btn" class="ag-btn">\u{1F9EA} Write Tests</button>
-          <button id="ag-open-page-btn" class="ag-btn" style="grid-column: span 2; background: #34a853; border: none; color: #fff;">\u{1F5A5}\uFE0F Open Full Window Control Page</button>
-          <button id="ag-term-btn" class="ag-btn" style="grid-column: span 2;">\u{1F4BB} Open Interactive TUI Terminal</button>
+        <div id="ag-chat-stream" class="ag-chat-stream">
+          <!-- Messages rendered dynamically -->
         </div>
 
-        <div id="ag-response-area" class="ag-response">
-          Antigravity Native Engine ready. Highlight code or type a prompt above to control Acode!
+        <div class="ag-chips-row">
+          <button id="chip-refactor" class="ag-chip">\u26A1 Refactor</button>
+          <button id="chip-fix" class="ag-chip">\u{1F41B} Fix Bug</button>
+          <button id="chip-explain" class="ag-chip">\u{1F4DD} Explain</button>
+          <button id="chip-test" class="ag-chip">\u{1F9EA} Unit Tests</button>
+          <button id="chip-clear" class="ag-chip" style="background:#555;">\u{1F5D1}\uFE0F Clear</button>
         </div>
 
-        <div class="ag-apply-bar">
-          <button id="ag-apply-sel" class="ag-btn ag-apply-btn">Replace Selection</button>
-          <button id="ag-apply-cursor" class="ag-btn ag-apply-btn">Insert at Cursor</button>
-          <button id="ag-apply-file" class="ag-btn ag-apply-btn">Replace File</button>
+        <div class="ag-input-box">
+          <textarea id="ag-chat-input" class="ag-input" placeholder="Chat with Antigravity CLI..."></textarea>
+          <button id="ag-send-btn" class="ag-send-btn">Send</button>
+        </div>
+
+        <div class="ag-footer-tools">
+          <button id="ag-full-window-btn" class="ag-tool-btn" style="background: #34a853;">\u{1F5A5}\uFE0F Full Window</button>
+          <button id="ag-terminal-btn" class="ag-tool-btn">\u{1F4BB} TUI Terminal</button>
         </div>
       </div>
     `;
-      this.responseArea = container.querySelector("#ag-response-area");
+      this.chatStream = container.querySelector("#ag-chat-stream");
       this.statusText = container.querySelector("#ag-context-status");
+      if (this.messages.length === 0) {
+        this.addMessage("agent", "Hello! I am Google Antigravity CLI running natively in Acode. How can I help you with your code today?");
+      } else {
+        this.renderMessages();
+      }
       this.bindEvents(container);
       this.updateContextInfo();
     }
@@ -975,85 +1228,154 @@ Antigravity is ready in your Acode workspace! Run 'agy' in terminal for interact
       if (!this.statusText) return;
       const fileInfo = EditorBridgeService.getActiveFileInfo();
       if (!fileInfo) {
-        this.statusText.innerText = "No file open in Acode";
+        this.statusText.innerText = "\u{1F4C4} No active file open";
         return;
       }
       if (fileInfo.hasSelection) {
-        this.statusText.innerText = `\u{1F4C4} ${fileInfo.name} (Selection: ${fileInfo.selectedText.length} chars)`;
+        this.statusText.innerText = `\u{1F4C4} ${fileInfo.name} (${fileInfo.selectedText.length} selected chars)`;
       } else {
         this.statusText.innerText = `\u{1F4C4} ${fileInfo.name} (${fileInfo.content.length} chars)`;
       }
     }
-    static bindEvents(container) {
-      const promptInput = container.querySelector("#ag-prompt-input");
-      const submitBtn = container.querySelector("#ag-submit-btn");
-      const refactorBtn = container.querySelector("#ag-refactor-btn");
-      const fixBtn = container.querySelector("#ag-fix-btn");
-      const explainBtn = container.querySelector("#ag-explain-btn");
-      const testBtn = container.querySelector("#ag-test-btn");
-      const openPageBtn = container.querySelector("#ag-open-page-btn");
-      const termBtn = container.querySelector("#ag-term-btn");
-      const applySelBtn = container.querySelector("#ag-apply-sel");
-      const applyCursorBtn = container.querySelector("#ag-apply-cursor");
-      const applyFileBtn = container.querySelector("#ag-apply-file");
-      submitBtn?.addEventListener("click", () => {
-        const prompt = promptInput?.value || "";
-        this.runAction("custom", prompt);
-      });
-      refactorBtn?.addEventListener("click", () => this.runAction("refactor"));
-      fixBtn?.addEventListener("click", () => this.runAction("fix"));
-      explainBtn?.addEventListener("click", () => this.runAction("explain"));
-      testBtn?.addEventListener("click", () => this.runAction("test"));
-      openPageBtn?.addEventListener("click", () => {
-        ControlPage.show();
-      });
-      termBtn?.addEventListener("click", () => {
-        TerminalService.launchInTerminal();
-      });
-      applySelBtn?.addEventListener("click", () => {
-        if (this.lastResult) {
-          const cleaned = this.extractCode(this.lastResult);
-          EditorBridgeService.replaceSelection(cleaned);
+    static addMessage(sender, text) {
+      const time = (/* @__PURE__ */ new Date()).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      const msg = {
+        id: String(Date.now()),
+        sender,
+        text,
+        timestamp: time
+      };
+      this.messages.push(msg);
+      this.renderMessages();
+    }
+    static renderMessages() {
+      if (!this.chatStream) return;
+      this.chatStream.innerHTML = "";
+      for (const msg of this.messages) {
+        const msgDiv = document.createElement("div");
+        msgDiv.className = `ag-msg ag-msg-${msg.sender}`;
+        const bubble = document.createElement("div");
+        bubble.className = `ag-bubble ag-bubble-${msg.sender}`;
+        if (msg.sender === "agent") {
+          bubble.appendChild(this.formatMarkdownAndCode(msg.text));
+        } else {
+          bubble.innerText = msg.text;
+        }
+        const timeDiv = document.createElement("div");
+        timeDiv.className = "ag-msg-time";
+        timeDiv.innerText = msg.timestamp;
+        msgDiv.appendChild(bubble);
+        msgDiv.appendChild(timeDiv);
+        this.chatStream.appendChild(msgDiv);
+      }
+      this.chatStream.scrollTop = this.chatStream.scrollHeight;
+    }
+    static formatMarkdownAndCode(text) {
+      const container = document.createElement("div");
+      const codeBlockRegex = /```(?:\w+)?\n([\s\S]*?)```/g;
+      let lastIndex = 0;
+      let match;
+      while ((match = codeBlockRegex.exec(text)) !== null) {
+        if (match.index > lastIndex) {
+          const textSegment = document.createElement("span");
+          textSegment.innerText = text.substring(lastIndex, match.index);
+          container.appendChild(textSegment);
+        }
+        const codeSnippet = match[1].trim();
+        const codeBox = document.createElement("div");
+        codeBox.className = "ag-code-box";
+        const codeHeader = document.createElement("div");
+        codeHeader.className = "ag-code-header";
+        codeHeader.innerText = "CODE SNIPPET";
+        const codeBody = document.createElement("div");
+        codeBody.className = "ag-code-body";
+        codeBody.innerText = codeSnippet;
+        const actionsBar = document.createElement("div");
+        actionsBar.className = "ag-code-actions";
+        const btnReplaceSel = document.createElement("button");
+        btnReplaceSel.className = "ag-mini-btn";
+        btnReplaceSel.innerText = "\u26A1 Replace Selection";
+        btnReplaceSel.onclick = () => {
+          EditorBridgeService.replaceSelection(codeSnippet);
           if (typeof acode.pushNotification === "function") {
             acode.pushNotification("Antigravity", "Replaced selection in editor", { type: "success" });
           }
-        }
-      });
-      applyCursorBtn?.addEventListener("click", () => {
-        if (this.lastResult) {
-          const cleaned = this.extractCode(this.lastResult);
-          EditorBridgeService.insertAtCursor(cleaned);
+        };
+        const btnInsertCursor = document.createElement("button");
+        btnInsertCursor.className = "ag-mini-btn";
+        btnInsertCursor.innerText = "\u{1F4E5} Insert at Cursor";
+        btnInsertCursor.onclick = () => {
+          EditorBridgeService.insertAtCursor(codeSnippet);
           if (typeof acode.pushNotification === "function") {
             acode.pushNotification("Antigravity", "Inserted code at cursor", { type: "success" });
           }
-        }
-      });
-      applyFileBtn?.addEventListener("click", () => {
-        if (this.lastResult) {
-          const cleaned = this.extractCode(this.lastResult);
-          EditorBridgeService.updateActiveFileContent(cleaned);
+        };
+        const btnReplaceFile = document.createElement("button");
+        btnReplaceFile.className = "ag-mini-btn";
+        btnReplaceFile.innerText = "\u{1F4C4} Replace File";
+        btnReplaceFile.onclick = () => {
+          EditorBridgeService.updateActiveFileContent(codeSnippet);
           if (typeof acode.pushNotification === "function") {
-            acode.pushNotification("Antigravity", "Replaced entire file in editor", { type: "success" });
+            acode.pushNotification("Antigravity", "Replaced file in editor", { type: "success" });
           }
+        };
+        actionsBar.appendChild(btnReplaceSel);
+        actionsBar.appendChild(btnInsertCursor);
+        actionsBar.appendChild(btnReplaceFile);
+        codeBox.appendChild(codeHeader);
+        codeBox.appendChild(codeBody);
+        codeBox.appendChild(actionsBar);
+        container.appendChild(codeBox);
+        lastIndex = codeBlockRegex.lastIndex;
+      }
+      if (lastIndex < text.length) {
+        const remainingText = document.createElement("span");
+        remainingText.innerText = text.substring(lastIndex);
+        container.appendChild(remainingText);
+      }
+      return container;
+    }
+    static bindEvents(container) {
+      const input = container.querySelector("#ag-chat-input");
+      const sendBtn = container.querySelector("#ag-send-btn");
+      const chipRefactor = container.querySelector("#chip-refactor");
+      const chipFix = container.querySelector("#chip-fix");
+      const chipExplain = container.querySelector("#chip-explain");
+      const chipTest = container.querySelector("#chip-test");
+      const chipClear = container.querySelector("#chip-clear");
+      const fullWindowBtn = container.querySelector("#ag-full-window-btn");
+      const terminalBtn = container.querySelector("#ag-terminal-btn");
+      const sendUserMessage = async (action, promptText) => {
+        const text = promptText || input?.value || "";
+        if (!text.trim() && action === "chat") return;
+        if (action === "chat") {
+          this.addMessage("user", text);
+          if (input) input.value = "";
+        } else {
+          this.addMessage("user", `[Action: ${action.toUpperCase()}] ${text}`);
+        }
+        this.addMessage("agent", "\u{1F916} Antigravity CLI is thinking...");
+        const res = await AgentBridgeService.executeTask({ action, prompt: text });
+        this.messages.pop();
+        this.addMessage("agent", res.resultText || res.error || "Done.");
+      };
+      sendBtn?.addEventListener("click", () => sendUserMessage("chat"));
+      input?.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && !e.shiftKey) {
+          e.preventDefault();
+          sendUserMessage("chat");
         }
       });
-    }
-    static extractCode(text) {
-      const match = text.match(/```(?:\w+)?\n([\s\S]*?)```/);
-      if (match && match[1]) {
-        return match[1].trim();
-      }
-      return text;
-    }
-    static async runAction(action, prompt) {
-      if (this.responseArea) {
-        this.responseArea.innerText = "\u{1F916} Antigravity is processing...";
-      }
-      const res = await AgentBridgeService.executeTask({ action, prompt });
-      this.lastResult = res.resultText || res.error || "";
-      if (this.responseArea) {
-        this.responseArea.innerText = this.lastResult;
-      }
+      chipRefactor?.addEventListener("click", () => sendUserMessage("refactor"));
+      chipFix?.addEventListener("click", () => sendUserMessage("fix"));
+      chipExplain?.addEventListener("click", () => sendUserMessage("explain"));
+      chipTest?.addEventListener("click", () => sendUserMessage("test"));
+      chipClear?.addEventListener("click", () => {
+        this.messages = [];
+        this.addMessage("agent", "Chat cleared. How can I assist you?");
+      });
+      fullWindowBtn?.addEventListener("click", () => ControlPage.show());
+      terminalBtn?.addEventListener("click", () => TerminalService.launchInTerminal());
     }
     static unregister() {
       const sidebarApps = acode.require("sidebarApps");
@@ -1066,9 +1388,9 @@ Antigravity is ready in your Acode workspace! Run 'agy' in terminal for interact
     }
   };
   __publicField(SidebarPanel, "container", null);
-  __publicField(SidebarPanel, "responseArea", null);
+  __publicField(SidebarPanel, "chatStream", null);
   __publicField(SidebarPanel, "statusText", null);
-  __publicField(SidebarPanel, "lastResult", "");
+  __publicField(SidebarPanel, "messages", []);
 
   // src/services/contextMenu.ts
   var ContextMenuService = class {
