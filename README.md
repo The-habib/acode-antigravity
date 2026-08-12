@@ -1,8 +1,8 @@
 <div align="center">
 
-# 🚀 Acode Antigravity
+# 🚀 Acode Antigravity — Full Native App Control Engine
 
-**Production-grade Google Antigravity CLI Integration for Acode on Android**
+**Full-Featured Native Google Antigravity AI Engine for Acode Editor on Android**
 
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg?style=for-the-badge)](https://github.com/The-habib/acode-antigravity)
 [![Acode Version](https://img.shields.io/badge/Acode-v1.9.0%2B-blue.svg?style=for-the-badge)](https://acode.app)
@@ -11,10 +11,10 @@
 [![GitHub Release](https://img.shields.io/github/v/release/The-habib/acode-antigravity?style=for-the-badge)](https://github.com/The-habib/acode-antigravity/releases)
 
 <p align="center">
-  <b>Run Google's flagship Agentic AI coding platform directly inside Acode's native terminal environment with zero desktop setup.</b>
+  <b>Google Antigravity now takes FULL NATIVE CONTROL of the entire Acode Editor app—featuring a Sidebar Control Panel, Context Menu Actions, Direct Editor Selection Manipulation, and Interactive TUI Terminal!</b>
 </p>
 
-[Quick Install](#-installation) • [Key Features](#-key-features) • [Usage](#-usage) • [Command Reference](#-command-palette-commands) • [Architecture](#-architecture--compatibility-engine) • [Troubleshooting](#-troubleshooting--diagnostics)
+[Quick Install](#-installation) • [Key Features](#-key-features) • [Native Control Features](#-native-app-control-capabilities) • [Usage](#-usage) • [Architecture](#-architecture)
 
 ---
 
@@ -22,18 +22,27 @@
 
 ## 🌟 Overview
 
-**Acode Antigravity** bridges the official **Google Antigravity CLI (`agy`)** and **Acode Editor** on Android. It bundles a high-performance native ARM64 glibc compatibility layer allowing the real, un-emulated `antigravity` binary to run inside Acode's xterm.js terminal with full interactive TUI, ANSI colors, keyboard controls, and active workspace binding.
+**Acode Antigravity** transforms Google Antigravity from a simple terminal tool into a **native AI engine driving the entire Acode app**. 
+
+Instead of remaining confined to a command line tab, Antigravity now connects directly to Acode's **Sidebar App API (`sideBarApps`)**, **Editor Context Menu API (`contextMenu`)**, **Editor Selection Manager (`editorManager`)**, and **Commands API**.
 
 ---
 
-## ✨ Key Features
+## ✨ Native App Control Capabilities
 
-- ⚡ **Native Execution**: Runs the authentic Google Antigravity binary (`1.1.12`) directly on Android ARM64—no PRoot, Docker, SSH, or cloud servers.
-- 📺 **Interactive TUI**: Full interactive terminal user interface powered by Acode's native xterm.js Terminal API (`acode.require('terminal')`).
-- 📂 **Workspace Binding**: Automatically opens Antigravity bound to your active project workspace directory.
-- ⌨️ **Keyboard Shortcuts**: Launch Antigravity instantly using `Ctrl+Alt+A` (`Cmd+Alt+A` on macOS).
-- 🛠️ **Built-in Self-Healing**: Includes automated diagnostic (`agy-check`), repair (`agy-repair`), and update (`agy-update`) commands.
-- 📌 **Persistent PATH Hooks**: Automatically configures `$HOME/.local/bin` in `~/.bashrc`, `~/.profile`, and `~/.zshrc`.
+- 🎨 **Sidebar Control Center**: A dedicated Google Antigravity GUI panel right inside Acode's sidebar (`sideBarApps`) with instant prompt submission, agent progress, and 1-click code application buttons.
+- ⚡ **Direct Editor Control (`editorManager`)**:
+  - `Replace Selection`: Replace highlighted code directly in editor tabs.
+  - `Insert at Cursor`: Insert AI-generated code snippets at cursor position.
+  - `Replace Entire File`: Overwrite active document with refactored code.
+  - `Open Workspace File`: Open generated files in new Acode tabs.
+- 🛠️ **Editor Context Menu Integration**: Highlight code → Right click → Choose:
+  - ⚡ *Google Antigravity: Refactor Code*
+  - 🐛 *Google Antigravity: Fix Code Bugs*
+  - 📝 *Google Antigravity: Explain Code*
+  - 🧪 *Google Antigravity: Generate Unit Tests*
+- ⌨️ **Keyboard Shortcut (`Ctrl+Alt+A`)**: Instant 1-key toggle to open the Antigravity Control Center.
+- 📺 **Interactive TUI Terminal**: Full terminal experience powered by Acode's native xterm.js server (`acode.require('terminal')`).
 
 ---
 
@@ -53,101 +62,38 @@
 
 ## 🎮 Usage
 
-### 1. Terminal Command Line
+### 1. Sidebar Control Panel
+Click the **🚀 Google Antigravity** icon in Acode's left sidebar (or press `Ctrl+Alt+A`) to open the native AI Control Panel.
+
+### 2. Editor Context Menu
+Highlight any block of code in Acode editor, right-click, and select any Antigravity action!
+
+### 3. Terminal Command Line
 Open Acode Terminal tab and run:
 
 ```sh
 agy
 ```
 
-If initializing for the first time, `agy` will automatically set binary permissions and launch the interactive agent session.
-
-### 2. Acode Command Palette (`Ctrl+Shift+P`)
-Search for **`Antigravity`** to access all integrated actions:
-
-| Command | Shortcut | Description |
-| :--- | :--- | :--- |
-| **`Antigravity: Launch`** | `Ctrl+Alt+A` | Launches `agy` in an interactive Acode Terminal tab |
-| **`Antigravity: Setup`** | — | Runs initial binary setup & PATH configuration |
-| **`Antigravity: Check Installation`** | — | Displays environment diagnostic status |
-| **`Antigravity: Repair`** | — | Repairs broken binary linkages or file permissions |
-| **`Antigravity: Update`** | — | Checks for and installs latest Antigravity CLI updates |
-| **`Antigravity: Show Environment`** | — | Opens interactive status and settings dialog |
-
 ---
 
-## ⚙️ Command Line Tooling Included
-
-The plugin installs 5 helper utilities into `$HOME/.local/bin`:
-
-| Utility | Description |
-| :--- | :--- |
-| `agy` | Primary launcher for Google Antigravity CLI |
-| `agy-setup` | Configures glibc dynamic loader paths & file modes |
-| `agy-check` | Performs deep environment diagnostic tests |
-| `agy-repair` | Self-healing script for permission or loader recovery |
-| `agy-update` | Manages atomic binary updates |
-
----
-
-## 🏗️ Architecture & Compatibility Engine
+## 🏗️ Architecture
 
 ```
- ┌───────────────────────────────────────────────────────────┐
- │                   Acode Android Editor                    │
- ├─────────────────────────────┬─────────────────────────────┤
- │    Acode Terminal API       │   Commands & Status Dialog  │
- └──────────────┬──────────────┴──────────────┬──────────────┘
-                │                             │
-                ▼                             ▼
- ┌───────────────────────────────────────────────────────────┐
- │                 Alpine Linux Container                    │
- ├───────────────────────────────────────────────────────────┤
- │  $HOME/.local/bin/agy  ──►  glibc ld-linux-aarch64 loader │
- │                                     │                     │
- │                                     ▼                     │
- │                        Native Antigravity Binary          │
- └───────────────────────────────────────────────────────────┘
-```
-
-| Component | Technical Detail |
-| :--- | :--- |
-| **Target Architecture** | ARM64 (`aarch64`) |
-| **Runtime Loader** | `ld-linux-aarch64.so.1` (glibc compatibility bundle) |
-| **Terminal Integration** | `acode.require('terminal')` -> `createServer()` |
-| **Manifest Spec** | Acode Plugin Standard v2 (minVersionCode: `292`) |
-
----
-
-## 🔍 Troubleshooting & Diagnostics
-
-If `agy` ever fails to execute, run the diagnostic suite in terminal:
-
-```sh
-agy-check
-```
-
-To automatically repair file permissions and loader links, run:
-
-```sh
-agy-repair
-```
-
----
-
-## 🤝 Contributing
-
-Contributions are welcome! Feel free to open issues or submit pull requests on our [GitHub Repository](https://github.com/The-habib/acode-antigravity).
-
-```sh
-# Clone project
-git clone https://github.com/The-habib/acode-antigravity.git
-cd acode-antigravity
-
-# Install dependencies & build
-npm install
-npm run build
-npm run test
+ ┌──────────────────────────────────────────────────────────────────────────────────┐
+ │                            ACODE EDITOR MAIN DOM                                 │
+ ├───────────────────┬───────────────────┬───────────────────┬──────────────────────┤
+ │ 🎨 Sidebar Panel  │ 🛠️ Context Menu   │ ⚡ Editor Manager │ 📺 Terminal xterm.js │
+ │ (sideBarApps)     │ (contextMenu)     │ (editorManager)   │ (acode.terminal)     │
+ └─────────┬─────────┴─────────┬─────────┴─────────┬─────────┴──────────┬───────────┘
+           │                   │                   │                    │
+           └───────────────────┴─────────┬─────────┴────────────────────┘
+                                         ▼
+ ┌──────────────────────────────────────────────────────────────────────────────────┐
+ │                    Antigravity Agent Native Bridge Service                       │
+ ├──────────────────────────────────────────────────────────────────────────────────┤
+ │                glibc ld-linux-aarch64 ──► Google Antigravity Engine              │
+ └──────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---

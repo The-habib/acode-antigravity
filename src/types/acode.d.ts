@@ -30,6 +30,29 @@ export interface CommandsAPI {
   removeCommand(name: string): void;
 }
 
+export interface SidebarAppsAPI {
+  add(
+    icon: string,
+    id: string,
+    title: string,
+    initFn: (container: HTMLElement) => void,
+    prepend?: boolean,
+    onSelected?: (container: HTMLElement) => void
+  ): void;
+  get(id: string): HTMLElement | null;
+  remove(id: string): void;
+}
+
+export interface ContextMenuAPI {
+  add(
+    text: string,
+    action: () => void,
+    condition?: () => boolean,
+    icon?: string
+  ): void;
+  remove(text: string): void;
+}
+
 export interface AcodeNotificationOptions {
   icon?: string;
   autoClose?: boolean;
@@ -61,6 +84,8 @@ export interface AcodeAPI {
   setPluginUnmount(pluginId: string, unmountFn: () => void): void;
   require(moduleName: 'terminal'): TerminalAPI;
   require(moduleName: 'commands'): CommandsAPI;
+  require(moduleName: 'sidebarApps'): SidebarAppsAPI;
+  require(moduleName: 'contextMenu'): ContextMenuAPI;
   require(moduleName: 'alert'): (title: string, message: string) => Promise<void>;
   require(moduleName: 'confirm'): (title: string, message: string) => Promise<boolean>;
   require(moduleName: 'prompt'): (title: string, defaultValue?: string, type?: string) => Promise<string | null>;
@@ -71,9 +96,31 @@ export interface AcodeAPI {
   pushNotification(title: string, message: string, options?: AcodeNotificationOptions): void;
 }
 
+export interface ActiveFile {
+  name: string;
+  filename: string;
+  location: string;
+  uri: string;
+  content: string;
+  isUnsaved: boolean;
+  session: any;
+  setText(text: string): void;
+  write(text: string): void;
+  save(): Promise<void>;
+}
+
+export interface EditorManager {
+  editor: any;
+  activeFile: ActiveFile;
+  files: ActiveFile[];
+  openFile(uri: string, options?: any): Promise<ActiveFile>;
+  on(event: string, callback: (...args: any[]) => void): void;
+  off(event: string, callback: (...args: any[]) => void): void;
+}
+
 declare global {
   var acode: AcodeAPI;
-  var editorManager: any;
+  var editorManager: EditorManager;
   var Terminal: {
     isInstalled(): Promise<boolean>;
   };
