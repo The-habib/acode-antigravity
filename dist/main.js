@@ -455,6 +455,23 @@ PATH Configured: ${env.pathConfigured}`;
         return false;
       }
     }
+    static async createNewFile(filename = "untitled.js", content = "") {
+      if (typeof editorManager === "undefined") return false;
+      try {
+        if (typeof editorManager.newFile === "function") {
+          await editorManager.newFile(filename, { text: content });
+          return true;
+        } else if (typeof acode !== "undefined" && typeof acode.newFile === "function") {
+          await acode.newFile(filename, content);
+          return true;
+        } else {
+          return this.updateActiveFileContent(content);
+        }
+      } catch (e) {
+        console.error("Failed creating new file in Acode:", e);
+        return false;
+      }
+    }
   };
 
   // src/services/agentBridge.ts
@@ -492,6 +509,9 @@ ${contextCode}
 \`\`\`
 ${contextCode}
 \`\`\``;
+          break;
+        case "create":
+          fullPrompt = `Create a new file based on prompt: "${request.prompt || "Generate code"}". Return complete source code inside a code block.`;
           break;
         case "custom":
           fullPrompt = `${request.prompt || "Analyze and assist with code"}
@@ -531,28 +551,283 @@ Antigravity is ready in your Acode workspace! Run 'agy' in terminal for interact
     }
   };
 
+  // src/ui/controlPage.ts
+  var ControlPage = class {
+    static show() {
+      const Page = acode.require("page");
+      if (!Page) {
+        if (typeof acode.pushNotification === "function") {
+          acode.pushNotification("Antigravity", "Acode Page API is unavailable", { type: "error" });
+        }
+        return;
+      }
+      if (!this.pageInstance) {
+        this.pageInstance = Page("\u{1F680} Google Antigravity Native Engine");
+        this.pageInstance.onhide = () => {
+          console.log("Antigravity Page closed");
+        };
+      }
+      const body = this.pageInstance.body;
+      this.renderUI(body);
+      this.pageInstance.show();
+    }
+    static renderUI(container) {
+      const fileInfo = EditorBridgeService.getActiveFileInfo();
+      const contextName = fileInfo ? fileInfo.name : "No file open";
+      const contextLength = fileInfo ? fileInfo.hasSelection ? `${fileInfo.selectedText.length} selected chars` : `${fileInfo.content.length} total chars` : "";
+      container.innerHTML = `
+      <style>
+        .ag-page-container {
+          padding: 16px;
+          color: #ffffff;
+          background: #121212;
+          font-family: system-ui, -apple-system, sans-serif;
+          display: flex;
+          flex-direction: column;
+          gap: 16px;
+          height: 100%;
+          box-sizing: border-box;
+          overflow-y: auto;
+        }
+        .ag-page-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          border-bottom: 1px solid #333;
+          padding-bottom: 12px;
+        }
+        .ag-page-title {
+          font-size: 18px;
+          font-weight: bold;
+          color: #4285f4;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+        .ag-page-badge {
+          background: #34a853;
+          color: #fff;
+          font-size: 11px;
+          padding: 3px 8px;
+          border-radius: 12px;
+          font-weight: 600;
+        }
+        .ag-page-card {
+          background: #1e1e1e;
+          border: 1px solid #333;
+          border-radius: 8px;
+          padding: 12px;
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+        }
+        .ag-page-input {
+          width: 100%;
+          min-height: 90px;
+          background: #252526;
+          color: #fff;
+          border: 1px solid #444;
+          border-radius: 6px;
+          padding: 10px;
+          box-sizing: border-box;
+          font-size: 13px;
+          resize: vertical;
+        }
+        .ag-page-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+          gap: 8px;
+        }
+        .ag-page-btn {
+          background: #2d2d2d;
+          color: #fff;
+          border: 1px solid #444;
+          padding: 10px 14px;
+          border-radius: 6px;
+          font-size: 12px;
+          font-weight: 600;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 6px;
+        }
+        .ag-page-btn:active {
+          opacity: 0.8;
+          background: #3d3d3d;
+        }
+        .ag-page-btn-primary {
+          background: #4285f4;
+          border: none;
+          color: #fff;
+        }
+        .ag-page-response {
+          background: #181818;
+          border: 1px solid #333;
+          border-radius: 6px;
+          padding: 12px;
+          font-size: 12px;
+          font-family: monospace;
+          line-height: 1.5;
+          white-space: pre-wrap;
+          word-break: break-word;
+          min-height: 150px;
+          max-height: 350px;
+          overflow-y: auto;
+        }
+        .ag-page-bar {
+          display: flex;
+          gap: 8px;
+        }
+      </style>
+
+      <div class="ag-page-container">
+        <div class="ag-page-header">
+          <div class="ag-page-title">
+            <span>\u{1F680} Google Antigravity</span>
+          </div>
+          <span class="ag-page-badge">Full Native Engine</span>
+        </div>
+
+        <div class="ag-page-card">
+          <div style="font-size: 12px; opacity: 0.8;">
+            \u{1F4CC} <strong>Active Context:</strong> ${contextName} (${contextLength})
+          </div>
+          <textarea id="ag-full-prompt" class="ag-page-input" placeholder="Type prompt for Antigravity (e.g. 'Refactor this function to be async', 'Add TypeScript types', 'Fix memory leak')..."></textarea>
+          
+          <div class="ag-page-grid">
+            <button id="ag-full-submit" class="ag-page-btn ag-page-btn-primary" style="grid-column: 1 / -1;">\u{1F916} Ask Antigravity Engine</button>
+            <button id="ag-full-refactor" class="ag-page-btn">\u26A1 Refactor Selection</button>
+            <button id="ag-full-fix" class="ag-page-btn">\u{1F41B} Fix Error</button>
+            <button id="ag-full-explain" class="ag-page-btn">\u{1F4DD} Explain Code</button>
+            <button id="ag-full-test" class="ag-page-btn">\u{1F9EA} Write Tests</button>
+            <button id="ag-full-tui" class="ag-page-btn" style="grid-column: 1 / -1; background: #34a853; border: none;">\u{1F5A5}\uFE0F Launch Full Interactive TUI Terminal</button>
+          </div>
+        </div>
+
+        <div class="ag-page-card">
+          <div style="font-size: 13px; font-weight: bold;">\u{1F4AC} Antigravity Output Stream</div>
+          <div id="ag-full-response" class="ag-page-response">Antigravity Native Engine is ready! Select code or type a prompt above.</div>
+          
+          <div class="ag-page-bar">
+            <button id="ag-full-app-sel" class="ag-page-btn ag-page-btn-primary" style="flex: 1;">Replace Selection</button>
+            <button id="ag-full-app-cur" class="ag-page-btn" style="flex: 1;">Insert at Cursor</button>
+            <button id="ag-full-app-file" class="ag-page-btn" style="flex: 1;">Replace File</button>
+          </div>
+        </div>
+      </div>
+    `;
+      this.bindEvents(container);
+    }
+    static bindEvents(container) {
+      const promptInput = container.querySelector("#ag-full-prompt");
+      const submitBtn = container.querySelector("#ag-full-submit");
+      const refactorBtn = container.querySelector("#ag-full-refactor");
+      const fixBtn = container.querySelector("#ag-full-fix");
+      const explainBtn = container.querySelector("#ag-full-explain");
+      const testBtn = container.querySelector("#ag-full-test");
+      const tuiBtn = container.querySelector("#ag-full-tui");
+      const responseArea = container.querySelector("#ag-full-response");
+      const appSelBtn = container.querySelector("#ag-full-app-sel");
+      const appCurBtn = container.querySelector("#ag-full-app-cur");
+      const appFileBtn = container.querySelector("#ag-full-app-file");
+      const runTask = async (action, userPrompt) => {
+        if (responseArea) responseArea.innerText = "\u{1F916} Antigravity is processing your request...";
+        const res = await AgentBridgeService.executeTask({ action, prompt: userPrompt });
+        this.lastResult = res.resultText || res.error || "";
+        if (responseArea) responseArea.innerText = this.lastResult;
+      };
+      submitBtn?.addEventListener("click", () => runTask("custom", promptInput?.value || ""));
+      refactorBtn?.addEventListener("click", () => runTask("refactor"));
+      fixBtn?.addEventListener("click", () => runTask("fix"));
+      explainBtn?.addEventListener("click", () => runTask("explain"));
+      testBtn?.addEventListener("click", () => runTask("test"));
+      tuiBtn?.addEventListener("click", () => {
+        TerminalService.launchInTerminal();
+      });
+      const extractCode = (text) => {
+        const match = text.match(/```(?:\w+)?\n([\s\S]*?)```/);
+        return match ? match[1].trim() : text;
+      };
+      appSelBtn?.addEventListener("click", () => {
+        if (this.lastResult) {
+          EditorBridgeService.replaceSelection(extractCode(this.lastResult));
+          if (typeof acode.pushNotification === "function") {
+            acode.pushNotification("Antigravity", "Replaced selection in editor", { type: "success" });
+          }
+        }
+      });
+      appCurBtn?.addEventListener("click", () => {
+        if (this.lastResult) {
+          EditorBridgeService.insertAtCursor(extractCode(this.lastResult));
+          if (typeof acode.pushNotification === "function") {
+            acode.pushNotification("Antigravity", "Inserted code at cursor", { type: "success" });
+          }
+        }
+      });
+      appFileBtn?.addEventListener("click", () => {
+        if (this.lastResult) {
+          EditorBridgeService.updateActiveFileContent(extractCode(this.lastResult));
+          if (typeof acode.pushNotification === "function") {
+            acode.pushNotification("Antigravity", "Replaced entire file in editor", { type: "success" });
+          }
+        }
+      });
+    }
+  };
+  __publicField(ControlPage, "pageInstance", null);
+  __publicField(ControlPage, "lastResult", "");
+
   // src/ui/sidebarPanel.ts
   var SidebarPanel = class {
     static register() {
       const sidebarApps = acode.require("sidebarApps");
       if (!sidebarApps) return;
+      this.injectStyles();
       try {
         sidebarApps.add(
-          "icon-antigravity",
+          "icon build icon-antigravity",
           "acode_antigravity_control",
           "Google Antigravity",
           (container) => {
+            container.classList.add("scroll");
             this.container = container;
             this.renderUI(container);
           },
           true,
-          () => {
+          (container) => {
+            container.classList.add("scroll");
+            this.container = container;
+            if (!container.children || container.children.length === 0) {
+              this.renderUI(container);
+            }
             this.updateContextInfo();
           }
         );
       } catch (e) {
         console.warn("Could not register sidebar app:", e);
       }
+    }
+    static injectStyles() {
+      if (typeof document === "undefined" || !document.head) return;
+      const styleId = "ag-sidebar-style";
+      if (document.getElementById(styleId)) return;
+      const style = document.createElement("style");
+      style.id = styleId;
+      style.innerHTML = `
+      .icon-antigravity {
+        background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%234285f4"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>') !important;
+        background-repeat: no-repeat !important;
+        background-position: center !important;
+        background-size: contain !important;
+        min-width: 24px !important;
+        min-height: 24px !important;
+        display: inline-block !important;
+        pointer-events: auto !important;
+        cursor: pointer !important;
+      }
+    `;
+      document.head.appendChild(style);
     }
     static renderUI(container) {
       container.innerHTML = `
@@ -563,10 +838,11 @@ Antigravity is ready in your Acode workspace! Run 'agy' in terminal for interact
           font-family: system-ui, -apple-system, sans-serif;
           display: flex;
           flex-direction: column;
-          gap: 12px;
+          gap: 10px;
           height: 100%;
           box-sizing: border-box;
           overflow-y: auto;
+          pointer-events: auto;
         }
         .ag-header {
           display: flex;
@@ -587,14 +863,14 @@ Antigravity is ready in your Acode workspace! Run 'agy' in terminal for interact
         }
         .ag-context-info {
           font-size: 11px;
-          opacity: 0.8;
-          background: rgba(255,255,255,0.05);
-          padding: 6px;
+          opacity: 0.9;
+          background: rgba(255,255,255,0.08);
+          padding: 8px;
           border-radius: 4px;
         }
         .ag-input {
           width: 100%;
-          min-height: 60px;
+          min-height: 70px;
           background: var(--dark-color, #1e1e1e);
           color: #fff;
           border: 1px solid var(--border-color, #444);
@@ -631,6 +907,7 @@ Antigravity is ready in your Acode workspace! Run 'agy' in terminal for interact
           color: #fff;
           border: none;
           grid-column: span 2;
+          font-weight: bold;
         }
         .ag-response {
           background: var(--dark-color, #1e1e1e);
@@ -669,12 +946,13 @@ Antigravity is ready in your Acode workspace! Run 'agy' in terminal for interact
         <textarea id="ag-prompt-input" class="ag-input" placeholder="Ask Antigravity to generate, refactor, or edit code..."></textarea>
 
         <div class="ag-actions-grid">
-          <button id="ag-submit-btn" class="ag-btn ag-btn-primary">\u{1F916} Ask Antigravity</button>
+          <button id="ag-submit-btn" class="ag-btn ag-btn-primary">\u{1F916} Ask Antigravity Engine</button>
           <button id="ag-refactor-btn" class="ag-btn">\u26A1 Refactor</button>
           <button id="ag-fix-btn" class="ag-btn">\u{1F41B} Fix Error</button>
           <button id="ag-explain-btn" class="ag-btn">\u{1F4DD} Explain</button>
           <button id="ag-test-btn" class="ag-btn">\u{1F9EA} Write Tests</button>
-          <button id="ag-term-btn" class="ag-btn" style="grid-column: span 2;">\u{1F5A5}\uFE0F Open Full TUI Terminal</button>
+          <button id="ag-open-page-btn" class="ag-btn" style="grid-column: span 2; background: #34a853; border: none; color: #fff;">\u{1F5A5}\uFE0F Open Full Window Control Page</button>
+          <button id="ag-term-btn" class="ag-btn" style="grid-column: span 2;">\u{1F4BB} Open Interactive TUI Terminal</button>
         </div>
 
         <div id="ag-response-area" class="ag-response">
@@ -713,6 +991,7 @@ Antigravity is ready in your Acode workspace! Run 'agy' in terminal for interact
       const fixBtn = container.querySelector("#ag-fix-btn");
       const explainBtn = container.querySelector("#ag-explain-btn");
       const testBtn = container.querySelector("#ag-test-btn");
+      const openPageBtn = container.querySelector("#ag-open-page-btn");
       const termBtn = container.querySelector("#ag-term-btn");
       const applySelBtn = container.querySelector("#ag-apply-sel");
       const applyCursorBtn = container.querySelector("#ag-apply-cursor");
@@ -725,6 +1004,9 @@ Antigravity is ready in your Acode workspace! Run 'agy' in terminal for interact
       fixBtn?.addEventListener("click", () => this.runAction("fix"));
       explainBtn?.addEventListener("click", () => this.runAction("explain"));
       testBtn?.addEventListener("click", () => this.runAction("test"));
+      openPageBtn?.addEventListener("click", () => {
+        ControlPage.show();
+      });
       termBtn?.addEventListener("click", () => {
         TerminalService.launchInTerminal();
       });
@@ -987,6 +1269,7 @@ ${message}`);
   // src/main.ts
   var PLUGIN_ID = "com.acode.antigravity";
   var COMMAND_NAMES = [
+    "Antigravity: Open Control Window",
     "Antigravity: Sidebar Control Panel",
     "Antigravity: Refactor Selection",
     "Antigravity: Fix Code Bugs",
@@ -1013,16 +1296,27 @@ ${message}`);
       const commandsApi = acode.require("commands");
       if (commandsApi) {
         commandsApi.addCommand({
+          name: "Antigravity: Open Control Window",
+          description: "Open Google Antigravity Full Native Control Window",
+          bindKey: { win: "Ctrl-Alt-A", mac: "Command-Alt-A" },
+          exec: () => {
+            ControlPage.show();
+          }
+        });
+        commandsApi.addCommand({
           name: "Antigravity: Sidebar Control Panel",
           description: "Open Google Antigravity Control Panel in Sidebar",
-          bindKey: { win: "Ctrl-Alt-A", mac: "Command-Alt-A" },
           exec: () => {
             const sideBarApps = acode.require("sidebarApps");
             if (sideBarApps && typeof sideBarApps.get === "function") {
               const el = sideBarApps.get("acode_antigravity_control");
               if (el && el.parentElement) {
                 el.parentElement.click();
+              } else {
+                ControlPage.show();
               }
+            } else {
+              ControlPage.show();
             }
           }
         });
@@ -1147,7 +1441,7 @@ ${message}`);
         });
       }
       if (typeof acode.pushNotification === "function") {
-        acode.pushNotification("Google Antigravity", "Full Native Control Engine activated in Acode! Check sidebar icon or press Ctrl+Alt+A", {
+        acode.pushNotification("Google Antigravity", "Full Native Control Engine activated! Press Ctrl+Alt+A or tap Antigravity in sidebar/commands.", {
           type: "success",
           autoClose: false
         });

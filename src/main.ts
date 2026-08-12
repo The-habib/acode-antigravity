@@ -2,6 +2,7 @@ import { TerminalService } from './services/terminal';
 import { InstallerService } from './services/installer';
 import { ScriptService } from './services/scripts';
 import { SidebarPanel } from './ui/sidebarPanel';
+import { ControlPage } from './ui/controlPage';
 import { ContextMenuService } from './services/contextMenu';
 import { EditorBridgeService } from './services/editorBridge';
 import { AgentBridgeService } from './services/agentBridge';
@@ -10,6 +11,7 @@ import { StatusDialog } from './ui/statusDialog';
 const PLUGIN_ID = 'com.acode.antigravity';
 
 const COMMAND_NAMES = [
+  'Antigravity: Open Control Window',
   'Antigravity: Sidebar Control Panel',
   'Antigravity: Refactor Selection',
   'Antigravity: Fix Code Bugs',
@@ -40,16 +42,28 @@ class AcodeAntigravityPlugin {
     const commandsApi = acode.require('commands');
     if (commandsApi) {
       commandsApi.addCommand({
+        name: 'Antigravity: Open Control Window',
+        description: 'Open Google Antigravity Full Native Control Window',
+        bindKey: { win: 'Ctrl-Alt-A', mac: 'Command-Alt-A' },
+        exec: () => {
+          ControlPage.show();
+        },
+      });
+
+      commandsApi.addCommand({
         name: 'Antigravity: Sidebar Control Panel',
         description: 'Open Google Antigravity Control Panel in Sidebar',
-        bindKey: { win: 'Ctrl-Alt-A', mac: 'Command-Alt-A' },
         exec: () => {
           const sideBarApps = acode.require('sidebarApps');
           if (sideBarApps && typeof sideBarApps.get === 'function') {
             const el = sideBarApps.get('acode_antigravity_control');
             if (el && el.parentElement) {
               el.parentElement.click();
+            } else {
+              ControlPage.show();
             }
+          } else {
+            ControlPage.show();
           }
         },
       });
@@ -185,7 +199,7 @@ class AcodeAntigravityPlugin {
     }
 
     if (typeof acode.pushNotification === 'function') {
-      acode.pushNotification('Google Antigravity', 'Full Native Control Engine activated in Acode! Check sidebar icon or press Ctrl+Alt+A', {
+      acode.pushNotification('Google Antigravity', 'Full Native Control Engine activated! Press Ctrl+Alt+A or tap Antigravity in sidebar/commands.', {
         type: 'success',
         autoClose: false,
       });

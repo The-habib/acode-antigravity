@@ -1,7 +1,7 @@
 import { EditorBridgeService } from './editorBridge';
 
 export interface AgentTaskRequest {
-  action: 'refactor' | 'explain' | 'fix' | 'test' | 'custom';
+  action: 'refactor' | 'explain' | 'fix' | 'test' | 'create' | 'custom';
   prompt?: string;
   codeContext?: string;
   fileName?: string;
@@ -36,6 +36,10 @@ export class AgentBridgeService {
 
       case 'test':
         fullPrompt = `Write complete unit tests for the following code snippet from "${filename}":\n\n\`\`\`\n${contextCode}\n\`\`\``;
+        break;
+
+      case 'create':
+        fullPrompt = `Create a new file based on prompt: "${request.prompt || 'Generate code'}". Return complete source code inside a code block.`;
         break;
 
       case 'custom':

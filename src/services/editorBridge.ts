@@ -117,4 +117,23 @@ export class EditorBridgeService {
       return false;
     }
   }
+
+  public static async createNewFile(filename: string = 'untitled.js', content: string = ''): Promise<boolean> {
+    if (typeof editorManager === 'undefined') return false;
+    try {
+      if (typeof editorManager.newFile === 'function') {
+        await editorManager.newFile(filename, { text: content });
+        return true;
+      } else if (typeof (acode as any) !== 'undefined' && typeof (acode as any).newFile === 'function') {
+        await (acode as any).newFile(filename, content);
+        return true;
+      } else {
+        return this.updateActiveFileContent(content);
+      }
+    } catch (e) {
+      console.error('Failed creating new file in Acode:', e);
+      return false;
+    }
+  }
 }
+

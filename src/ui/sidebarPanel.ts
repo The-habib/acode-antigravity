@@ -1,6 +1,7 @@
 import { EditorBridgeService } from '../services/editorBridge';
 import { AgentBridgeService } from '../services/agentBridge';
 import { TerminalService } from '../services/terminal';
+import { ControlPage } from './controlPage';
 
 export class SidebarPanel {
   private static container: HTMLElement | null = null;
@@ -12,23 +13,54 @@ export class SidebarPanel {
     const sidebarApps = acode.require('sidebarApps');
     if (!sidebarApps) return;
 
+    this.injectStyles();
+
     try {
       sidebarApps.add(
-        'icon-antigravity',
+        'icon build icon-antigravity',
         'acode_antigravity_control',
         'Google Antigravity',
-        (container) => {
+        (container: HTMLElement) => {
+          container.classList.add('scroll');
           this.container = container;
           this.renderUI(container);
         },
         true,
-        () => {
+        (container: HTMLElement) => {
+          container.classList.add('scroll');
+          this.container = container;
+          if (!container.children || container.children.length === 0) {
+            this.renderUI(container);
+          }
           this.updateContextInfo();
         }
       );
     } catch (e) {
       console.warn('Could not register sidebar app:', e);
     }
+  }
+
+  private static injectStyles(): void {
+    if (typeof document === 'undefined' || !document.head) return;
+    const styleId = 'ag-sidebar-style';
+    if (document.getElementById(styleId)) return;
+
+    const style = document.createElement('style');
+    style.id = styleId;
+    style.innerHTML = `
+      .icon-antigravity {
+        background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%234285f4"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>') !important;
+        background-repeat: no-repeat !important;
+        background-position: center !important;
+        background-size: contain !important;
+        min-width: 24px !important;
+        min-height: 24px !important;
+        display: inline-block !important;
+        pointer-events: auto !important;
+        cursor: pointer !important;
+      }
+    `;
+    document.head.appendChild(style);
   }
 
   private static renderUI(container: HTMLElement): void {
@@ -40,10 +72,11 @@ export class SidebarPanel {
           font-family: system-ui, -apple-system, sans-serif;
           display: flex;
           flex-direction: column;
-          gap: 12px;
+          gap: 10px;
           height: 100%;
           box-sizing: border-box;
           overflow-y: auto;
+          pointer-events: auto;
         }
         .ag-header {
           display: flex;
@@ -64,14 +97,14 @@ export class SidebarPanel {
         }
         .ag-context-info {
           font-size: 11px;
-          opacity: 0.8;
-          background: rgba(255,255,255,0.05);
-          padding: 6px;
+          opacity: 0.9;
+          background: rgba(255,255,255,0.08);
+          padding: 8px;
           border-radius: 4px;
         }
         .ag-input {
           width: 100%;
-          min-height: 60px;
+          min-height: 70px;
           background: var(--dark-color, #1e1e1e);
           color: #fff;
           border: 1px solid var(--border-color, #444);
@@ -108,6 +141,7 @@ export class SidebarPanel {
           color: #fff;
           border: none;
           grid-column: span 2;
+          font-weight: bold;
         }
         .ag-response {
           background: var(--dark-color, #1e1e1e);
@@ -146,12 +180,13 @@ export class SidebarPanel {
         <textarea id="ag-prompt-input" class="ag-input" placeholder="Ask Antigravity to generate, refactor, or edit code..."></textarea>
 
         <div class="ag-actions-grid">
-          <button id="ag-submit-btn" class="ag-btn ag-btn-primary">🤖 Ask Antigravity</button>
+          <button id="ag-submit-btn" class="ag-btn ag-btn-primary">🤖 Ask Antigravity Engine</button>
           <button id="ag-refactor-btn" class="ag-btn">⚡ Refactor</button>
           <button id="ag-fix-btn" class="ag-btn">🐛 Fix Error</button>
           <button id="ag-explain-btn" class="ag-btn">📝 Explain</button>
           <button id="ag-test-btn" class="ag-btn">🧪 Write Tests</button>
-          <button id="ag-term-btn" class="ag-btn" style="grid-column: span 2;">🖥️ Open Full TUI Terminal</button>
+          <button id="ag-open-page-btn" class="ag-btn" style="grid-column: span 2; background: #34a853; border: none; color: #fff;">🖥️ Open Full Window Control Page</button>
+          <button id="ag-term-btn" class="ag-btn" style="grid-column: span 2;">💻 Open Interactive TUI Terminal</button>
         </div>
 
         <div id="ag-response-area" class="ag-response">
@@ -195,6 +230,7 @@ export class SidebarPanel {
     const fixBtn = container.querySelector('#ag-fix-btn');
     const explainBtn = container.querySelector('#ag-explain-btn');
     const testBtn = container.querySelector('#ag-test-btn');
+    const openPageBtn = container.querySelector('#ag-open-page-btn');
     const termBtn = container.querySelector('#ag-term-btn');
 
     const applySelBtn = container.querySelector('#ag-apply-sel');
@@ -210,6 +246,10 @@ export class SidebarPanel {
     fixBtn?.addEventListener('click', () => this.runAction('fix'));
     explainBtn?.addEventListener('click', () => this.runAction('explain'));
     testBtn?.addEventListener('click', () => this.runAction('test'));
+
+    openPageBtn?.addEventListener('click', () => {
+      ControlPage.show();
+    });
 
     termBtn?.addEventListener('click', () => {
       TerminalService.launchInTerminal();
